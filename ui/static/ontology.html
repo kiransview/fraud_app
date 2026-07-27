@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel — Ontology</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .doc-wrap{max-width:840px;margin:0 auto;}
+  .doc-panel{padding:8px 0 40px;}
+  .doc-body{padding:6px 34px 30px;font-size:14.5px;line-height:1.7;color:var(--text-2);}
+  .doc-body h2{font-family:var(--font-display);font-size:24px;font-weight:700;color:var(--text);margin:0 0 14px;}
+  .doc-body h3{font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--text);margin:34px 0 10px;padding-top:14px;border-top:1px solid var(--line-soft);}
+  .doc-body h4{font-size:14.5px;font-weight:700;color:var(--text);margin:22px 0 8px;}
+  .doc-body h5{font-size:13px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:0.04em;margin:18px 0 6px;}
+  .doc-body p{margin:0 0 14px;}
+  .doc-body strong{color:var(--text);font-weight:700;}
+  .doc-body code{font-family:var(--font-mono);font-size:12.5px;background:var(--surface-raised);color:var(--text);padding:1px 5px;border-radius:5px;}
+  .doc-body ul{margin:0 0 14px;padding-left:22px;}
+  .doc-body li{margin:0 0 6px;}
+  .doc-body pre{
+    background:var(--surface-raised);border:1px solid var(--line-soft);border-radius:10px;
+    padding:14px 16px;overflow-x:auto;margin:0 0 16px;
+  }
+  .doc-body pre code{background:none;padding:0;font-size:12px;line-height:1.6;color:var(--text-2);white-space:pre;}
+  .doc-body pre.md-mermaid{border-color:var(--signal-bg);}
+  .mermaid-tag{
+    display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;
+    text-transform:uppercase;letter-spacing:0.05em;color:var(--signal);background:var(--signal-bg);
+    padding:3px 9px;border-radius:20px;margin-bottom:10px;
+  }
+  .doc-table-wrap{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line-soft);border-radius:10px;}
+  table.md-table{width:100%;border-collapse:collapse;font-size:13px;}
+  table.md-table th{
+    text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;
+    color:var(--text-3);background:var(--surface-raised);padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  table.md-table td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top;color:var(--text-2);}
+  table.md-table tr:last-child td{border-bottom:none;}
+  table.md-table td:first-child{color:var(--text);font-weight:600;white-space:nowrap;}
+  .doc-loading,.doc-error{padding:40px 20px;text-align:center;color:var(--text-3);font-size:13px;}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5.5V11c0 5.6 3.4 9.9 8 11 4.6-1.1 8-5.4 8-11V5.5L12 2z" stroke="#2563EB" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12.2l2.4 2.4 4.6-4.9" stroke="#2563EB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="wordmark">SENTINEL</span>
+      </div>
+      <span class="tagline">Payment fraud command center</span>
+    </div>
+    <nav class="page-nav">
+      <a href="index.html">Chat</a>
+      <a href="logs.html">Agent log</a>
+      <a href="ontology.html" class="active">Ontology</a>
+    </nav>
+  </header>
+
+  <div class="doc-wrap">
+    <section class="panel doc-panel">
+      <div class="panel-head"><h2>Domain ontology</h2></div>
+      <div class="doc-body" id="docBody"><div class="doc-loading">Loading…</div></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function inline(text){
+    let t = escapeHtml(text);
+    t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+    return t;
+  }
+
+  function splitRow(row){
+    return row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  }
+
+  function renderTable(rows){
+    const header = splitRow(rows[0]);
+    const body = rows.slice(2).map(splitRow);
+    const thead = '<tr>' + header.map(h => `<th>${inline(h)}</th>`).join('') + '</tr>';
+    const tbody = body.map(r => '<tr>' + r.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>').join('');
+    return `<div class="doc-table-wrap"><table class="md-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  }
+
+  // Small, tailored markdown -> HTML renderer covering exactly what
+  // docs/ontology.md uses: headers, fenced code (incl. a mermaid block,
+  // shown as labeled source rather than rendered graphically -- this page
+  // stays dependency-free like the rest of the UI), tables, bullet lists,
+  // bold/inline-code, and paragraphs.
+  function renderMarkdown(md){
+    const lines = md.replace(/\r\n/g, '\n').split('\n');
+    let html = '';
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+
+      if (line.startsWith('```')) {
+        const lang = line.slice(3).trim();
+        const code = [];
+        i++;
+        while (i < lines.length && !lines[i].startsWith('```')) { code.push(lines[i]); i++; }
+        i++;
+        const tag = lang === 'mermaid' ? '<span class="mermaid-tag">Mermaid diagram source</span><br>' : '';
+        html += `<pre class="${lang === 'mermaid' ? 'md-mermaid' : ''}">${tag}<code>${escapeHtml(code.join('\n'))}</code></pre>`;
+        continue;
+      }
+
+      const h = line.match(/^(#{2,5})\s+(.*)$/);
+      if (h) {
+        const level = h[1].length + 1; // offset so the doc's own H1 doesn't fight the panel title
+        html += `<h${level}>${inline(h[2])}</h${level}>`;
+        i++; continue;
+      }
+      if (/^#\s+/.test(line)) { i++; continue; } // skip the doc's top-level H1, panel already has the title
+
+      if (line.trim().startsWith('|')) {
+        const rows = [];
+        while (i < lines.length && lines[i].trim().startsWith('|')) { rows.push(lines[i]); i++; }
+        html += renderTable(rows);
+        continue;
+      }
+
+      if (/^\s*-\s/.test(line)) {
+        const items = [];
+        while (i < lines.length && (/^\s*-\s/.test(lines[i]) || (lines[i].trim() && !/^#{1,5}\s/.test(lines[i]) && items.length && /^\s{2,}\S/.test(lines[i])))) {
+          if (/^\s*-\s/.test(lines[i])) items.push(lines[i].replace(/^\s*-\s/, ''));
+          else items[items.length - 1] += ' ' + lines[i].trim();
+          i++;
+        }
+        html += '<ul>' + items.map(it => `<li>${inline(it)}</li>`).join('') + '</ul>';
+        continue;
+      }
+
+      if (line.trim() === '') { i++; continue; }
+
+      const para = [line];
+      i++;
+      while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('|') &&
+             !/^#{1,5}\s/.test(lines[i]) && !lines[i].startsWith('```') && !/^\s*-\s/.test(lines[i])) {
+        para.push(lines[i]); i++;
+      }
+      html += `<p>${inline(para.join(' '))}</p>`;
+    }
+    return html;
+  }
+
+  async function boot(){
+    const el = document.getElementById('docBody');
+    try {
+      const res = await fetch('/api/docs/ontology.md');
+      if (!res.ok) throw new Error(res.statusText);
+      const md = await res.text();
+      el.innerHTML = renderMarkdown(md);
+    } catch (e) {
+      el.innerHTML = `<div class="doc-error">Couldn't load the ontology document (${e.message || e}). It lives at <code>docs/ontology.md</code> in the repo.</div>`;
+    }
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

@@ -45,9 +45,11 @@ data/
     compliance_policy.md      the real policy text the Compliance agent reads
 ui/
   server.py            FastAPI service exposing the graph (see "Dashboard UI" below)
-  static/index.html    the live dashboard frontend
-  static/submit.html   guided case-intake form + requirements chat assistant
+  static/index.html    chat-primary console: submit/look up/approve/decline cases by
+                        talking to it, plus a dynamic dashboard sidebar (stat tiles,
+                        decision + score-trend charts, live case queue)
   static/logs.html     per-case, timestamped step-by-step agent log
+  static/ontology.html renders docs/ontology.md in-browser for viewing
 run.py                 launches the dashboard UI (uvicorn + FastAPI)
 scripts/run_samples.py   console-only check: runs the 3 sample cases, no UI
 ```
@@ -65,8 +67,11 @@ python run.py
 `python run.py` starts the dashboard UI -- it does not run any analysis by
 itself. Once it's running, open:
 
-- http://127.0.0.1:8000/ -- the dashboard
-- http://127.0.0.1:8000/submit.html -- guided intake form + chat assistant
+- http://127.0.0.1:8000/ -- the console: chat is the primary interface (submit a
+  transaction in plain language, look up a case, approve/decline an escalation),
+  with a guided form and the dynamic dashboard available from the sidebar
+- http://127.0.0.1:8000/logs.html -- per-case step-by-step agent log
+- http://127.0.0.1:8000/ontology.html -- the domain ontology, rendered for viewing
 
 Leave that process running (Ctrl+C to stop) and use the browser to actually
 submit and review cases. If you just want a quick console check that the
@@ -138,25 +143,29 @@ same `graph` used by `scripts/run_samples.py`:
   stopped is still viewable (marked "interrupted") but can't actually be
   resumed until the checkpointer itself is durable too (see Next steps).
 
-`ui/static/index.html` is vanilla HTML/CSS/JS (no build step): it submits
-cases, opens an `EventSource` per running case, and re-derives each
-pipeline node's live status (pending/running/done/skipped/unavailable) from
-the state updates as they arrive.
+`ui/static/index.html` is vanilla HTML/CSS/JS (no build step), built chat-first:
+the chat column is the primary way to work a case, with a form and a dynamic
+dashboard alongside it as an equally-capable shortcut, not a separate flow.
 
-### Guided intake (`submit.html`)
-
-A second page for submitting a transaction through a real form (dropdowns +
-text inputs per field) instead of hand-written JSON, plus a chat panel for
-questions about what each field means and how the pipeline uses it:
-
-- `POST /api/assistant/chat` is a separate, stateless `gpt-oss-120b` call
-  (not the review graph) with a system prompt describing the transaction/
-  customer-profile schema and the routing/scoring rules. The current form
-  values are sent along with each question so answers are specific to what
-  the analyst has typed in, not generic. It never produces a risk score or
-  decision itself -- only an actual graph run does that.
-- On submit, the form links to `index.html?case=ID`, which the dashboard
-  reads on load to auto-select and attach to that case's live stream.
+- **Chat drives the same actions the buttons do.** `POST /api/assistant/chat`
+  sends the analyst's message to `gpt-oss-120b` (`ChatTogether`) bound to four
+  tools -- submit a transaction, look up a case, resume (approve/decline) an
+  escalated one, list cases -- via LangChain's `.bind_tools()`. The model only
+  extracts intent + structured parameters; the actual state change always goes
+  through the same `/api/cases` / `/api/cases/{id}/resume` endpoints a button
+  click would use, so chat can't do anything the UI itself can't do. A regex
+  fallback (`_recover_leaked_tool_call`) recovers tool calls this model
+  occasionally leaks as raw text instead of a parsed `tool_calls` entry.
+- **The form** (toggled open from the sidebar) is a real dropdown/text-input
+  form for submitting a transaction without hand-written JSON or chat -- both
+  paths call the same `POST /api/cases`.
+- **The dashboard sidebar** is dynamic: stat tiles, a decision-mix bar chart,
+  an SVG score-trend line chart (with the 25/90 auto-approve/auto-decline
+  reference lines), and a live case queue, all re-rendered as cases update.
+- Every running case opens an `EventSource` and re-derives its pipeline node
+  status (pending/running/done/skipped/unavailable) from the state updates as
+  they arrive, whether it was started from chat, the form, or is just being
+  watched from the queue.
 
 ### Agent log (`logs.html`)
 
@@ -172,6 +181,15 @@ the elapsed time since the previous step. The `/api/cases/{id}/resume`
 endpoint writes the graph's full post-resume `audit_trail` back into the
 registry (not just the pre-escalation entries), so the analyst's decision
 and the narrative generation both show up here too.
+
+### Ontology (`ontology.html`)
+
+A fourth page that renders [`docs/ontology.md`](docs/ontology.md) in-browser
+for viewing -- the class hierarchy, the class/relationship tables, and the
+worked instance example -- via `GET /api/docs/ontology.md` and a small
+dependency-free Markdown renderer in the page itself (the Mermaid diagram is
+shown as labeled source rather than rendered graphically, consistent with the
+rest of the UI having no build step or external script dependency).
 
 ## What's real vs. simulated in `tools.py`
 

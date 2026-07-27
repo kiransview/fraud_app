@@ -21,7 +21,9 @@ from __future__ import annotations
 import json
 import os
 import queue
+import re
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -35,7 +37,7 @@ load_dotenv()
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -49,67 +51,113 @@ from fraud_agent.graph import graph  # noqa: E402
 
 app = FastAPI(title="Sentinel Fraud Review API")
 
-# -------------------------------------------------------- intake assistant --
-# A separate, small-talk chat model that helps an analyst fill out the intake
-# form and understand what the pipeline does with each field. It never scores
-# or decides anything itself -- only the real graph run does that.
+# -------------------------------------------------------- chat assistant --
+# Chat is the app's primary interface: it can hold a normal conversation AND
+# trigger real actions via tool-calling. The LLM only decides *intent* and
+# extracts *parameters* here -- it never scores or decides anything about
+# fraud itself, and it never touches the graph directly. Every action it
+# proposes is carried out by the frontend calling the exact same REST/SSE
+# endpoints a human clicking buttons would use (submit_case, the SSE stream,
+# resume_case), so there's exactly one code path for "a case actually runs."
 _ASSISTANT_MODEL_NAME = "openai/gpt-oss-120b"
 _assistant_model: ChatTogether | None = None
 
-_ASSISTANT_SYSTEM_PROMPT = """You are the intake assistant for Sentinel, a payment-fraud \
-review system. You help a fraud analyst fill out the transaction intake form correctly \
-and understand what the automated review pipeline will do with their case. Be concise \
--- a sentence or two per answer unless the analyst asks for more detail.
 
-TRANSACTION FIELDS
-- id: unique transaction identifier (e.g. "TXN-12345"). Optional -- auto-generated if left blank.
-- amount: the transaction amount, as a number.
-- currency: ISO currency code (USD, EUR, GBP, ...).
-- merchant: the merchant or payee name.
-- category: electronics, grocery, travel, dining, wire, jewelry, or other. This affects \
-the behavioral-baseline comparison, since typical spend varies a lot by category.
-- channel: ecommerce, card_present, or wire_transfer.
-- geo: city/country the transaction originated from.
-- home_geo: the account holder's usual home location. The Risk Analysis agent compares \
-geo vs home_geo to flag "impossible travel" -- too far, too fast since the last session.
-- device_id / device_new: whether this device has been seen on the account before. A new \
-device is one of the strongest signals the Risk Analysis agent weighs.
-- ip_address: the IP address the transaction came from; screened for proxy/VPN/abuse history.
-- new_payee: whether the payee/recipient was just added to the account. Most relevant for \
-wire transfers -- a brand-new payee receiving a large wire is a classic mule pattern.
+class SubmitTransactionAction(BaseModel):
+    """Submit a new transaction for fraud review. Use this whenever the user
+    describes a transaction/payment they want reviewed."""
 
-CUSTOMER PROFILE FIELDS
-- account_id: the account identifier.
-- name: the account holder's name (or business name). Screened against sanctions/PEP lists.
-- prior_flag_count: how many times this account has previously been flagged. Any non-zero \
-count forces the full review regardless of amount.
+    reply: str = Field(description="A short, natural confirmation to show right away, e.g. 'Submitting that $5,000 wire transfer now...'")
+    amount: float = Field(description="Transaction amount")
+    currency: str = Field(default="USD", description="ISO currency code")
+    merchant: str = Field(default="Unspecified merchant", description="Merchant or payee name")
+    category: str = Field(default="other", description="One of: electronics, grocery, travel, dining, wire, jewelry, other")
+    channel: str = Field(default="ecommerce", description="One of: ecommerce, card_present, wire_transfer")
+    geo: str = Field(default="Unknown", description="Where the transaction originated, e.g. 'Lagos, NG'")
+    home_geo: str = Field(default="", description="The account's usual home location; leave empty to default to geo (no travel signal)")
+    device_new: bool = Field(default=False, description="True only if the user says this is a new/unrecognized device")
+    new_payee: bool = Field(default=False, description="True only if the user says this is a new payee/recipient")
+    account_holder_name: str = Field(default="Unspecified", description="The customer or business name on the account")
+    prior_flag_count: int = Field(default=0, description="How many times this account was previously flagged, if mentioned")
 
-HOW THE PIPELINE USES THIS
-There are two subagents: **Risk Analysis** (spending patterns, travel plausibility, \
-device/IP reputation, linked-account signals) and **Compliance** (sanctions screening \
-and business rules).
-1. The Supervisor looks at amount, device_new, new_payee, and prior_flag_count to choose \
-between running both agents and a cheap fast-path (Risk Analysis only) for routine \
-transactions -- currently, amounts of $250 or less on a known device with no new payee \
-and no prior flags take the fast-path.
-2. Each subagent scores 0-100 based on its own evidence.
-3. The Aggregator combines the two scores into a weighted composite score, with a hard \
-override: a strong compliance match forces the composite straight to 100.
-4. The composite score routes the case: 25 or below auto-approves, 90 or above auto-declines, \
-anything in between escalates to a human analyst.
 
-If the analyst's current form values are shared with you, use them to give specific \
-feedback (e.g. flag an unusual amount/category combination, or inconsistent device_new / \
-new_payee values) rather than only generic explanations. Never invent a risk score or \
-decision yourself -- only an actual pipeline run produces that; you're here to help fill \
-out the form and understand the process."""
+class LookupCaseAction(BaseModel):
+    """Look up the status, score, decision, or narrative of an existing case."""
+
+    reply: str = Field(description="Short message, e.g. 'Let me check on that.'")
+    case_id: str = Field(default="", description="Exact case ID (e.g. TXN-xxxx) if the user gave one; else leave empty")
+    merchant_hint: str = Field(default="", description="Merchant/payee name if the user referred to the case that way instead of by ID")
+
+
+class ResumeCaseAction(BaseModel):
+    """Approve or decline a case that is escalated and awaiting analyst review."""
+
+    reply: str = Field(description="Short confirmation, e.g. 'Declining that case now.'")
+    decision: str = Field(description="Either 'approve' or 'decline'")
+    case_id: str = Field(default="", description="Case ID if the user gave one; else leave empty to mean the most recently discussed case")
+
+
+class ListCasesAction(BaseModel):
+    """List recent cases, optionally filtered by status."""
+
+    reply: str = Field(description="Short message, e.g. 'Here's what's in the queue.'")
+    status_filter: str = Field(default="", description="One of: queued, running, escalated, approve, decline -- or empty for all")
+
+
+_ASSISTANT_TOOLS = [SubmitTransactionAction, LookupCaseAction, ResumeCaseAction, ListCasesAction]
+
+_ASSISTANT_SYSTEM_PROMPT = """You are Sentinel's chat assistant -- payment fraud review, \
+by chat. You can hold a normal conversation AND trigger real actions:
+- submit a new transaction for review
+- look up an existing case
+- approve or decline an escalated case
+- list recent cases
+
+Call the matching tool when the user's message clearly asks for one of those actions. \
+If they're just asking a question (how does X work, what does field Y mean), do NOT call \
+a tool -- just answer directly in plain text, concisely.
+
+FIELD NOTES (for submitting a transaction)
+- category: electronics, grocery, travel, dining, wire, jewelry, or other.
+- channel: ecommerce, card_present, or wire_transfer -- infer wire_transfer if they say "wire".
+- geo / home_geo: home_geo defaults to geo if not mentioned (implies no travel risk signal).
+- device_new / new_payee: only set true if the user actually says so.
+- Never invent a risk score or decision yourself in your reply text -- only an actual \
+pipeline run produces that. If you called an action tool, keep `reply` to a short \
+in-progress confirmation; the real result gets shown separately once the action completes."""
 
 
 def _get_assistant_model() -> ChatTogether:
     global _assistant_model
     if _assistant_model is None:
-        _assistant_model = ChatTogether(model=_ASSISTANT_MODEL_NAME, temperature=0.3)
+        _assistant_model = ChatTogether(model=_ASSISTANT_MODEL_NAME, temperature=0.2).bind_tools(_ASSISTANT_TOOLS)
     return _assistant_model
+
+
+# gpt-oss-120b occasionally leaks its raw harmony-format tool-call tokens
+# into the response *content* instead of a parsed `tool_calls` entry (e.g.
+# "<|start|>assistant<|channel|>commentary to=functions.ResumeCase
+# <|constrain|>json<|message|>{...}<|call|>..."), and also sometimes drops
+# the "Action" suffix from the tool's real class name. Recover the intended
+# call by regex rather than ever showing raw tokens to the user -- the same
+# "don't trust the model to self-report cleanly" lesson as
+# fraud_agent/subagents.py's JSON extraction.
+_HARMONY_LEAK_PATTERN = re.compile(r"to=functions\.(\w+).*?<\|message\|>(\{.*?\})\s*<\|call\|>", re.DOTALL)
+_TOOL_NAME_ALIASES = {t.__name__.replace("Action", "").lower(): t.__name__ for t in _ASSISTANT_TOOLS}
+
+
+def _recover_leaked_tool_call(text: str) -> tuple[str, dict] | None:
+    match = _HARMONY_LEAK_PATTERN.search(text)
+    if not match:
+        return None
+    name = _TOOL_NAME_ALIASES.get(match.group(1).lower())
+    if not name:
+        return None
+    try:
+        args = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return None
+    return name, args
 
 
 class ChatTurn(BaseModel):
@@ -119,19 +167,11 @@ class ChatTurn(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatTurn]
-    form_snapshot: dict | None = None
 
 
 @app.post("/api/assistant/chat")
 async def assistant_chat(payload: ChatRequest) -> dict:
-    system_prompt = _ASSISTANT_SYSTEM_PROMPT
-    if payload.form_snapshot:
-        system_prompt += (
-            "\n\nThe analyst's form currently has these values filled in:\n"
-            + json.dumps(payload.form_snapshot, indent=2)
-        )
-
-    lc_messages: list[Any] = [SystemMessage(content=system_prompt)]
+    lc_messages: list[Any] = [SystemMessage(content=_ASSISTANT_SYSTEM_PROMPT)]
     for turn in payload.messages:
         if turn.role == "user":
             lc_messages.append(HumanMessage(content=turn.content))
@@ -140,11 +180,56 @@ async def assistant_chat(payload: ChatRequest) -> dict:
 
     model = _get_assistant_model()
 
-    def _call() -> str:
-        return model.invoke(lc_messages).content
+    def _call():
+        return model.invoke(lc_messages)
 
-    reply = await run_in_threadpool(_call)
-    return {"reply": reply}
+    response = await run_in_threadpool(_call)
+
+    if response.tool_calls:
+        call = response.tool_calls[0]
+        name, args = call["name"], call["args"]
+    else:
+        recovered = _recover_leaked_tool_call(response.content or "")
+        if recovered:
+            name, args = recovered
+        else:
+            reply_text = response.content or "Sorry, I didn't catch that -- could you rephrase?"
+            if "<|" in reply_text:  # still-garbled harmony tokens we couldn't recover -- never show raw
+                reply_text = "Sorry, I had trouble with that -- could you try rephrasing?"
+            return {"reply": reply_text, "action": None}
+
+    if name == "SubmitTransactionAction":
+        action = {
+            "type": "submit",
+            "transaction": {
+                "amount": args.get("amount", 0),
+                "currency": args.get("currency", "USD"),
+                "merchant": args.get("merchant", "Unspecified merchant"),
+                "category": args.get("category", "other"),
+                "channel": args.get("channel", "ecommerce"),
+                "geo": args.get("geo", "Unknown"),
+                "home_geo": args.get("home_geo") or args.get("geo", "Unknown"),
+                "device_id": f"dev-{uuid.uuid4().hex[:8]}",
+                "device_new": bool(args.get("device_new", False)),
+                "ip_address": f"203.0.113.{uuid.uuid4().int % 254 + 1}",
+                "new_payee": bool(args.get("new_payee", False)),
+            },
+            "customer_profile": {
+                "account_id": f"acct-{uuid.uuid4().hex[:8]}",
+                "name": args.get("account_holder_name", "Unspecified"),
+                "prior_flag_count": int(args.get("prior_flag_count", 0)),
+            },
+        }
+    elif name == "LookupCaseAction":
+        action = {"type": "lookup", "case_id": args.get("case_id", ""), "merchant_hint": args.get("merchant_hint", "")}
+    elif name == "ResumeCaseAction":
+        action = {"type": "resume", "case_id": args.get("case_id", ""), "decision": args.get("decision", "")}
+    elif name == "ListCasesAction":
+        action = {"type": "list", "status_filter": args.get("status_filter", "")}
+    else:
+        action = None
+
+    return {"reply": args.get("reply", "On it."), "action": action}
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -154,7 +239,36 @@ STATIC_DIR = Path(__file__).parent / "static"
 # LangGraph's own execution checkpointer (fraud_agent/graph.py) is still
 # MemorySaver (in-process only) -- see _load_registry() for what that means
 # for a case that was mid-run when the server last stopped.
-REGISTRY_PATH = Path(__file__).resolve().parent.parent / "data" / "case_registry.json"
+_REPO_REGISTRY_PATH = Path(__file__).resolve().parent.parent / "data" / "case_registry.json"
+
+
+def _resolve_registry_path() -> Path:
+    """Prefer the repo-relative path (writable locally and in the Docker
+    image). Some hosts -- notably Vercel's serverless filesystem -- only
+    allow writes under a temp directory; probing here and falling back
+    avoids a 500 on every request. This does NOT make state durable across
+    separate serverless invocations (each can be a fresh instance with an
+    empty /tmp) -- see README's "Deploying to HuggingFace Spaces" section
+    for why this app needs a real persistently-running process, not a
+    serverless one, to behave correctly."""
+    try:
+        _REPO_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        probe = _REPO_REGISTRY_PATH.parent / ".write_test"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
+        return _REPO_REGISTRY_PATH
+    except OSError:
+        fallback = Path(tempfile.gettempdir()) / "sentinel_case_registry.json"
+        print(
+            f"[sentinel] {_REPO_REGISTRY_PATH.parent} isn't writable "
+            f"(read-only filesystem?) -- falling back to {fallback}. "
+            "Case history will not survive a restart on this host.",
+            file=sys.stderr,
+        )
+        return fallback
+
+
+REGISTRY_PATH = _resolve_registry_path()
 
 _registry_lock = threading.Lock()
 _registry: dict[str, dict[str, Any]] = {}
@@ -165,12 +279,17 @@ def _now() -> float:
 
 
 def _save_registry_locked() -> None:
-    """Writes `_registry` to disk. Caller must already hold `_registry_lock`."""
-    REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = REGISTRY_PATH.with_suffix(".json.tmp")
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(_registry, f)
-    os.replace(tmp_path, REGISTRY_PATH)  # atomic replace on both Windows and POSIX
+    """Writes `_registry` to disk. Caller must already hold `_registry_lock`.
+    Best-effort: a write failure here degrades to "this update isn't
+    persisted" rather than crashing the request that triggered it."""
+    try:
+        REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = REGISTRY_PATH.with_suffix(".json.tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(_registry, f)
+        os.replace(tmp_path, REGISTRY_PATH)  # atomic replace on both Windows and POSIX
+    except OSError as exc:
+        print(f"[sentinel] could not persist case registry: {exc}", file=sys.stderr)
 
 
 def _load_registry() -> None:
@@ -263,6 +382,24 @@ def get_reference_file(filename: str):
     if not path.exists():
         raise HTTPException(404, "not found")
     return FileResponse(path, media_type=_REFERENCE_MEDIA_TYPES[filename])
+
+
+# Same allowlist pattern as above, for repo docs the UI renders for viewing
+# (currently just the ontology) rather than citation evidence.
+_DOCS_DIR = Path(__file__).resolve().parent.parent / "docs"
+_DOCS_MEDIA_TYPES = {
+    "ontology.md": "text/markdown",
+}
+
+
+@app.get("/api/docs/{filename}")
+def get_doc_file(filename: str):
+    if filename not in _DOCS_MEDIA_TYPES:
+        raise HTTPException(404, "not found")
+    path = _DOCS_DIR / filename
+    if not path.exists():
+        raise HTTPException(404, "not found")
+    return FileResponse(path, media_type=_DOCS_MEDIA_TYPES[filename])
 
 
 @app.get("/api/cases")

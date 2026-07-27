@@ -3,144 +3,116 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sentinel — Fraud Operations Console</title>
+<title>Sentinel — Fraud Operations Chat</title>
 <link rel="stylesheet" href="theme.css">
 <style>
-  .live-status{margin-left:auto;}
-  .workspace{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start;}
-  .left-col{display:flex;flex-direction:column;gap:16px;}
+  .workspace{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start;height:calc(100vh - 100px);}
 
-  /* ---- submit panel ---- */
-  .submit-card{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;}
-  .sample-btn{
-    text-align:left;font-size:12.5px;color:var(--text-2);background:var(--surface-raised);
-    border:1px solid var(--line);border-radius:9px;padding:9px 11px;cursor:pointer;
-  }
-  .sample-btn:hover{background:var(--surface-hover);color:var(--text);border-color:var(--signal);}
-  .sample-btn .sb-title{font-weight:600;color:var(--text);display:block;}
-  .sample-btn .sb-meta{font-family:var(--font-mono);font-size:11px;color:var(--text-3);}
-  details.custom{margin-top:4px;}
-  details.custom summary{font-size:11.5px;color:var(--text-3);cursor:pointer;padding:4px 0;}
-  details.custom textarea{
-    width:100%;min-height:140px;background:var(--ink);color:var(--text-2);border:1px solid var(--line);
-    border-radius:8px;font-family:var(--font-mono);font-size:11.5px;padding:8px;margin-top:6px;resize:vertical;
-  }
-  .run-custom-btn{margin-top:6px;font-size:12px;font-weight:600;color:var(--signal);background:var(--signal-bg);
-    border:1px solid transparent;border-radius:8px;padding:7px 12px;cursor:pointer;}
-  .run-custom-btn:hover{background:var(--signal);color:var(--ink);}
-  .submit-error{font-size:11.5px;color:var(--critical);}
+  /* ---------------------------------------------------------------- chat --- */
+  .chat-col{display:flex;flex-direction:column;height:100%;}
+  .chat-log{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:14px;}
+  .msg-row{display:flex;flex-direction:column;max-width:86%;}
+  .msg-row.user{align-self:flex-end;align-items:flex-end;}
+  .msg-row.assistant{align-self:flex-start;align-items:flex-start;}
+  .bubble{font-size:13.5px;line-height:1.55;padding:10px 14px;border-radius:12px;}
+  .msg-row.user .bubble{background:var(--signal-bg);color:var(--text);border:1px solid transparent;}
+  .msg-row.assistant .bubble{background:var(--surface-raised);color:var(--text-2);border:1px solid var(--line);}
+  .bubble p{margin:0 0 8px;}
+  .bubble p:last-child{margin-bottom:0;}
+  .bubble strong{color:var(--text);}
+  .chat-empty{margin:auto;text-align:center;color:var(--text-3);font-size:13px;max-width:380px;}
+  .chat-empty .suggestions{display:flex;flex-direction:column;gap:6px;margin-top:14px;}
+  .suggestion-btn{font-size:12px;color:var(--text-2);background:var(--surface-raised);border:1px solid var(--line);
+    border-radius:8px;padding:8px 12px;cursor:pointer;text-align:left;}
+  .suggestion-btn:hover{border-color:var(--signal);color:var(--text);}
 
-  /* ---- queue ---- */
-  .queue-list{display:flex;flex-direction:column;padding:2px 8px 10px;max-height:calc(100vh - 430px);min-height:120px;overflow-y:auto;}
-  .queue-empty{padding:20px 12px;font-size:12.5px;color:var(--text-3);}
-  .queue-item{
-    display:flex;align-items:stretch;gap:10px;padding:11px 10px 11px 12px;margin:2px 0;border-radius:10px;
-    cursor:pointer;border:1px solid transparent;background:none;text-align:left;width:100%;position:relative;
-  }
+  .chat-input-row{display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--line);}
+  .chat-input-row textarea{flex:1;resize:none;background:var(--ink);color:var(--text);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;font-size:13.5px;font-family:inherit;min-height:44px;max-height:140px;}
+  .chat-input-row textarea:focus{border-color:var(--signal);}
+  .chat-send{font-size:13px;font-weight:600;color:var(--signal);background:var(--signal-bg);
+    border:1px solid transparent;border-radius:10px;padding:0 18px;cursor:pointer;}
+  .chat-send:hover:not(:disabled){background:var(--signal);color:var(--ink);}
+  .chat-send:disabled{opacity:0.4;cursor:default;}
+  .thinking{color:var(--text-3);font-style:italic;}
+
+  /* ---- case card rendered inside a chat bubble ---- */
+  .case-card{border:1px solid var(--line);border-radius:10px;background:var(--ink);padding:10px 12px;margin-top:4px;min-width:280px;}
+  .case-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;font-weight:600;color:var(--text);}
+  .case-card-meta{font-size:11px;color:var(--text-3);margin-top:2px;}
+  .case-steps{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+  .case-step{display:flex;gap:8px;font-size:11.5px;align-items:baseline;}
+  .case-step .dot{width:6px;height:6px;border-radius:50%;flex:none;margin-top:4px;background:var(--text-3);}
+  .case-step .dot.done{background:var(--good);}
+  .case-step .dot.running{background:var(--signal);animation:pulse 1s ease-in-out infinite;}
+  .case-step .dot.skip{background:transparent;border:1.5px dashed var(--text-3);}
+  .case-step .dot.review{background:var(--warning);animation:pulse 1.4s ease-in-out infinite;}
+  .case-step .label{font-weight:600;color:var(--text-2);flex:none;}
+  .case-step .detail{color:var(--text-3);}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+
+  .case-score-line{margin-top:10px;font-size:13px;}
+  .case-score-line .score{font-family:var(--font-mono);font-weight:600;color:var(--text);}
+  .band-good{color:var(--good);} .band-warning{color:var(--warning);}
+  .band-serious{color:var(--serious);} .band-critical{color:var(--critical);}
+  .case-factors{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+  .case-factor{font-size:11.5px;color:var(--text-3);}
+  .case-factor b{color:var(--text-2);}
+  .case-narrative{margin-top:8px;font-size:12.5px;color:var(--text-2);line-height:1.5;border-top:1px solid var(--line-soft);padding-top:8px;}
+  .case-actions{display:flex;gap:8px;margin-top:10px;}
+  .case-actions .btn{padding:6px 12px;font-size:12px;}
+
+  /* -------------------------------------------------------------- sidebar --- */
+  .sidebar-col{display:flex;flex-direction:column;gap:14px;height:100%;overflow-y:auto;padding-right:2px;}
+  .new-case-btn{width:100%;font-size:13px;padding:11px;}
+
+  .form-panel{padding:14px 16px 16px;}
+  .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
+  .field.full{grid-column:1/-1;}
+  .field label{font-size:11px;color:var(--text-3);}
+  .field input,.field select{background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:7px;
+    padding:7px 9px;font-size:12.5px;}
+  .field input:focus,.field select:focus{border-color:var(--signal);}
+  .form-panel .btn.primary{width:100%;margin-top:4px;}
+
+  .stat-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 16px;}
+  .stat-tile{background:var(--surface-raised);border-radius:9px;padding:9px 11px;}
+  .stat-tile .stat-label{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-3);}
+  .stat-tile .stat-value{font-family:var(--font-mono);font-size:19px;font-weight:600;color:var(--text);margin-top:2px;}
+
+  .chart-block{padding:0 16px 14px;}
+  .chart-title{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-3);margin-bottom:8px;}
+  .bar-row{display:grid;grid-template-columns:70px 1fr 26px;gap:8px;align-items:center;font-size:11px;color:var(--text-2);margin-bottom:5px;}
+  .bar-track{height:8px;border-radius:4px;background:var(--surface-raised);overflow:hidden;}
+  .bar-fill{height:100%;border-radius:4px;}
+  .bar-fill.st-approve{background:var(--good);}
+  .bar-fill.st-decline{background:var(--critical);}
+  .bar-fill.st-escalated{background:var(--warning);}
+  .bar-fill.st-pending{background:var(--signal);}
+  .bar-count{text-align:right;font-family:var(--font-mono);}
+
+  .trend-empty{font-size:11.5px;color:var(--text-3);padding:4px 0;}
+  .trend-svg{width:100%;height:auto;overflow:visible;}
+  .trend-line{fill:none;stroke:var(--signal);stroke-width:2;}
+  .trend-threshold{stroke:var(--line);stroke-width:1;stroke-dasharray:2 3;}
+  .trend-dot{fill:var(--signal);}
+  .trend-axis-label{fill:var(--text-3);font-size:8.5px;}
+
+  .queue-panel{padding:0 8px 10px;}
+  .queue-list{display:flex;flex-direction:column;max-height:260px;overflow-y:auto;}
+  .queue-item{display:flex;align-items:stretch;gap:8px;padding:9px 8px;margin:1px 0;border-radius:9px;
+    cursor:pointer;border:1px solid transparent;background:none;text-align:left;width:100%;}
   .queue-item:hover{background:var(--surface-hover);}
-  .queue-item.active{background:var(--surface-raised);border-color:var(--line);}
-  .queue-item.active::before{content:'';position:absolute;left:-1px;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--signal);}
-  .stripe{width:4px;border-radius:3px;flex:none;}
-  .stripe.band-good{background:var(--good);}
-  .stripe.band-warning{background:var(--warning);}
-  .stripe.band-serious{background:var(--serious);}
-  .stripe.band-critical{background:var(--critical);}
-  .stripe.band-pending{background:var(--line);}
-  .qi-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;}
-  .qi-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline;}
-  .qi-id{font-family:var(--font-mono);font-size:11px;color:var(--text-3);}
-  .qi-merchant{font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .qi-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;}
-  .qi-amount{font-family:var(--font-mono);font-size:13px;color:var(--text-2);}
-
-  /* ---- case column ---- */
-  .case-col{display:flex;flex-direction:column;gap:16px;}
-  .empty-state{padding:60px 20px;text-align:center;color:var(--text-3);font-size:13.5px;}
-  .case-head{padding:18px 20px;}
-  .case-head-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
-  .case-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-  .case-merchant{font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--text);text-wrap:balance;}
-  .case-id{font-family:var(--font-mono);font-size:12px;color:var(--text-3);}
-  .case-meta{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;}
-  .meta-item{display:flex;flex-direction:column;gap:2px;}
-  .meta-item .meta-label{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-3);}
-  .meta-item .meta-value{font-size:13px;color:var(--text-2);}
-  .meta-item .meta-value.mono{font-family:var(--font-mono);}
-  .case-amount{font-family:var(--font-mono);font-size:26px;font-weight:600;color:var(--text);}
-  .case-actions{display:flex;gap:8px;flex:none;align-items:center;}
-  .btn.approve:hover:not(:disabled){color:var(--good);border-color:var(--good);}
-  .btn.decline:hover:not(:disabled){color:var(--critical);border-color:var(--critical);}
-  .action-note{font-size:12px;color:var(--text-3);}
-
-  .case-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start;}
-
-  .pipeline-card{padding:18px 20px 22px;}
-  .pf{display:flex;flex-direction:column;align-items:center;}
-  .pf-node{width:100%;max-width:230px;background:var(--surface-raised);border:1px solid var(--line);border-radius:10px;
-    padding:9px 12px;display:flex;flex-direction:column;gap:3px;position:relative;z-index:1;}
-  .pf-node.solo{max-width:260px;}
-  .pf-node-top{display:flex;align-items:center;gap:8px;}
-  .pf-node-label{font-size:12.5px;font-weight:600;color:var(--text);flex:1;}
-  .status-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--text-3);}
-  .status-dot.done{background:var(--good);}
-  .status-dot.review{background:var(--warning);animation:pulse 1.4s ease-in-out infinite;}
-  .status-dot.running{background:var(--signal);animation:pulse 1s ease-in-out infinite;}
-  .status-dot.skip{background:transparent;border:1.5px dashed var(--text-3);}
-  .status-dot.na{background:transparent;border:1.5px dashed var(--warning);}
-  .pf-node-note{font-size:11px;color:var(--text-3);padding-left:0;line-height:1.35;min-height:14px;}
-  .pf-node.skip{opacity:0.55;}
-  .pf-node.na{border-color:var(--warning);}
-  .pf-node.review{border-color:var(--warning);}
-  .pf-stem{width:2px;height:20px;background:var(--line);}
-  .pf-parallel-wrap{position:relative;width:100%;max-width:400px;margin:0 auto;padding-top:20px;}
-  .pf-parallel-wrap::before{content:'';position:absolute;top:0;left:11%;right:11%;height:2px;background:var(--line);}
-  .pf-parallel{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;width:100%;}
-  .pf-parallel .pf-node{position:relative;max-width:none;}
-  .pf-parallel .pf-node::before{content:'';position:absolute;top:-20px;left:50%;width:2px;height:20px;background:var(--line);}
-
-  .factors-card{padding:18px 20px 20px;}
-  .factor-row{display:grid;grid-template-columns:1fr 64px;gap:12px;align-items:start;padding:9px 0;border-bottom:1px solid var(--line-soft);}
-  .factor-row:last-child{border-bottom:none;}
-  .factor-label{display:flex;flex-direction:column;gap:6px;}
-  .factor-name{font-size:12.5px;color:var(--text-2);}
-  .factor-track{height:6px;border-radius:4px;background:var(--surface-raised);overflow:hidden;}
-  .factor-fill{height:100%;border-radius:4px;}
-  .factor-fill.band-good{background:var(--good);}
-  .factor-fill.band-warning{background:var(--warning);}
-  .factor-fill.band-serious{background:var(--serious);}
-  .factor-fill.band-critical{background:var(--critical);}
-  .factor-fill.band-na{background:var(--line);}
-  .factor-score{font-family:var(--font-mono);font-size:13px;text-align:right;color:var(--text-2);padding-top:2px;}
-  .placeholder{font-size:12.5px;color:var(--text-3);padding:6px 0;}
-
-  .sources{margin-top:2px;}
-  .sources summary{font-size:11px;color:var(--text-3);cursor:pointer;list-style:none;}
-  .sources summary::-webkit-details-marker{display:none;}
-  .sources summary::before{content:'\25b8\a0';}
-  .sources[open] summary::before{content:'\25be\a0';}
-  .citation{font-size:11.5px;color:var(--text-3);padding:6px 0 2px 12px;border-left:2px solid var(--line);margin-top:6px;line-height:1.4;}
-  .citation-label{font-weight:600;color:var(--text-2);}
-  .citation-source{display:block;font-style:italic;margin:2px 0;}
-  .citation-path{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);}
-  .citation-path a{color:var(--signal);text-decoration:none;}
-  .citation-path a:hover{text-decoration:underline;}
-
-  .risk-score-line{display:flex;align-items:baseline;gap:6px;font-size:13px;color:var(--text-2);}
-  .risk-score-line .score{font-family:var(--font-mono);font-size:15px;font-weight:600;color:var(--text);}
-  .risk-score-line .band-good{color:var(--good);}
-  .risk-score-line .band-warning{color:var(--warning);}
-  .risk-score-line .band-serious{color:var(--serious);}
-  .risk-score-line .band-critical{color:var(--critical);}
-
-  .narrative-card{padding:18px 20px 20px;}
-  .narrative-body{font-size:13.5px;color:var(--text-2);line-height:1.6;}
+  .queue-item .stripe{width:3px;border-radius:3px;flex:none;}
+  .queue-item .qi-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .queue-item .qi-merchant{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .queue-item .qi-meta{display:flex;justify-content:space-between;font-size:10.5px;color:var(--text-3);}
+  .queue-empty{padding:14px 8px;font-size:12px;color:var(--text-3);}
 
   @media (max-width: 980px){
-    .workspace{grid-template-columns:1fr;}
-    .case-grid{grid-template-columns:1fr;}
-  }
-  @media (prefers-reduced-motion: reduce){
-    .live-dot.on, .status-dot.running, .status-dot.review{animation:none;}
+    .workspace{grid-template-columns:1fr;height:auto;}
+    .chat-col{height:70vh;}
   }
 </style>
 </head>
@@ -156,9 +128,9 @@
       <span class="tagline">Payment fraud command center</span>
     </div>
     <nav class="page-nav">
-      <a href="index.html" class="active">Dashboard</a>
-      <a href="submit.html">New case (guided form)</a>
+      <a href="index.html" class="active">Chat</a>
       <a href="logs.html">Agent log</a>
+      <a href="ontology.html">Ontology</a>
     </nav>
     <div class="live-status">
       <div class="live-dot-row"><span class="live-dot" id="liveDot"></span><span id="liveText">Connecting…</span></div>
@@ -167,16 +139,65 @@
   </header>
 
   <div class="workspace">
-    <div class="left-col">
-      <section class="panel submit-card">
-        <div class="panel-head" style="padding:0 0 4px;"><h2>New case</h2></div>
-        <div id="sampleButtons"></div>
-        <details class="custom">
-          <summary>Custom transaction (JSON)</summary>
-          <textarea id="customJson"></textarea>
-          <button class="run-custom-btn" id="runCustomBtn">Run custom case</button>
-        </details>
-        <div class="submit-error" id="submitError"></div>
+    <section class="panel chat-col">
+      <div class="chat-log" id="chatLog">
+        <div class="chat-empty">
+          Ask Sentinel to review a transaction, check on a case, or approve/decline one awaiting review.
+          <div class="suggestions">
+            <button class="suggestion-btn" data-msg="Submit a $2,340 electronics purchase from Lagos, NG on a new device for J. Whitfield, home is Columbus, OH">Submit a suspicious electronics purchase</button>
+            <button class="suggestion-btn" data-msg="Submit a routine $42 grocery purchase in Columbus, OH for J. Whitfield on a known device">Submit a routine grocery purchase</button>
+            <button class="suggestion-btn" data-msg="What does device_new affect?">Ask how the pipeline works</button>
+          </div>
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <textarea id="chatInput" placeholder="Ask Sentinel anything, or tell it what to do…" rows="1"></textarea>
+        <button class="chat-send" id="chatSend">Send</button>
+      </div>
+    </section>
+
+    <aside class="sidebar-col">
+      <button class="btn primary new-case-btn" id="newCaseBtn">+ New case (guided form)</button>
+
+      <section class="panel form-panel" id="formPanel" hidden>
+        <div class="panel-head" style="padding:0 0 10px;"><h2>Submit via form</h2></div>
+        <div class="field-grid">
+          <div class="field full"><label>Merchant / payee</label><input id="f-merchant"></div>
+          <div class="field"><label>Amount</label><input id="f-amount" type="number"></div>
+          <div class="field"><label>Currency</label>
+            <select id="f-currency"><option>USD</option><option>EUR</option><option>GBP</option><option>CAD</option><option>INR</option></select>
+          </div>
+          <div class="field"><label>Category</label>
+            <select id="f-category"><option value="electronics">Electronics</option><option value="grocery">Grocery</option><option value="travel">Travel</option><option value="dining">Dining</option><option value="wire">Wire</option><option value="jewelry">Jewelry</option><option value="other">Other</option></select>
+          </div>
+          <div class="field"><label>Channel</label>
+            <select id="f-channel"><option value="ecommerce">E-commerce</option><option value="card_present">Card present</option><option value="wire_transfer">Wire transfer</option></select>
+          </div>
+          <div class="field"><label>Origin</label><input id="f-geo" placeholder="Lagos, NG"></div>
+          <div class="field"><label>Home location</label><input id="f-home-geo" placeholder="Columbus, OH"></div>
+          <div class="field"><label>Device new?</label>
+            <select id="f-device-new"><option value="false">Known</option><option value="true">New</option></select>
+          </div>
+          <div class="field"><label>New payee?</label>
+            <select id="f-new-payee"><option value="false">No</option><option value="true">Yes</option></select>
+          </div>
+          <div class="field full"><label>Account holder / business name</label><input id="f-name"></div>
+        </div>
+        <button class="btn primary" id="formSubmitBtn">Run review</button>
+        <div id="formError" style="font-size:11.5px;color:var(--critical);margin-top:6px;"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Overview</h2></div>
+        <div class="stat-tiles" id="statTiles"></div>
+        <div class="chart-block">
+          <div class="chart-title">Decisions</div>
+          <div id="decisionChart"></div>
+        </div>
+        <div class="chart-block">
+          <div class="chart-title">Composite score trend</div>
+          <div id="scoreTrend"></div>
+        </div>
       </section>
 
       <section class="panel">
@@ -184,242 +205,428 @@
           <h2>Case queue</h2>
           <span class="count-chip" id="queueCount">0</span>
         </div>
-        <div class="queue-list" id="queueList"><div class="queue-empty">No cases yet — submit one above.</div></div>
+        <div class="queue-panel"><div class="queue-list" id="queueList"><div class="queue-empty">No cases yet.</div></div></div>
       </section>
-    </div>
-
-    <section class="case-col" id="caseCol">
-      <div class="panel empty-state">Select or submit a case to see the agent pipeline run live.</div>
-    </section>
+    </aside>
   </div>
 </div>
 
 <script>
 (function(){
   const API = "";
-  const BANDS = [
-    {max:24, key:'good', label:'Low'},
-    {max:49, key:'warning', label:'Watch'},
-    {max:74, key:'serious', label:'Elevated'},
-    {max:101, key:'critical', label:'Critical'},
-  ];
-  const bandFor = (score) => BANDS.find(b => score <= b.max);
-
-  const NODE_META = {
-    supervisor: 'Supervisor',
-    risk_analysis: 'Risk Analysis',
-    compliance: 'Compliance',
-    aggregator: 'Risk Aggregator',
-    decision: 'Decision Router',
+  const NODE_LABELS = {
+    supervisor: 'Supervisor', risk_analysis: 'Risk Analysis', compliance: 'Compliance',
+    aggregator: 'Risk Aggregator', decision: 'Decision Router', human_review: 'Analyst Decision',
     narrative: 'Narrative Agent',
   };
   const PARALLEL = ['risk_analysis', 'compliance'];
+  const BANDS = [{max:24,key:'good',label:'Low'},{max:49,key:'warning',label:'Watch'},{max:74,key:'serious',label:'Elevated'},{max:101,key:'critical',label:'Critical'}];
+  const bandFor = (s) => BANDS.find(b => s <= b.max);
 
-  let SAMPLES = [];
-  let cases = {};           // id -> case object mirroring the server registry
-  let selectedId = null;
-  const streaming = new Set(); // ids with an open EventSource
+  let cases = {};
+  let lastCaseId = null;
+  let chatHistory = [];
+  const streaming = new Set();
 
   async function api(path, opts) {
     const res = await fetch(API + path, opts);
     if (!res.ok) throw new Error((await res.text()) || res.statusText);
     return res.json();
   }
+  function fmtMoney(n, ccy) {
+    n = Number(n || 0);
+    return (ccy === 'USD' ? '$' : '') + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  function formatReply(text) {
+    // Minimal **bold** + paragraph handling for the assistant's plain-text replies.
+    const escaped = escapeHtml(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    return escaped.split(/\n\n+/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+  }
+  function statusLabel(status) {
+    return { queued:'Queued', running:'Running', escalated:'Escalated', approve:'Approved', decline:'Declined', error:'Error', interrupted:'Interrupted' }[status] || status;
+  }
 
-  // ---------------------------------------------------------------- boot --
+  // ------------------------------------------------------------------ boot --
   async function boot() {
-    try {
-      SAMPLES = await api('/api/samples');
-      renderSampleButtons();
-      setLive(true);
-    } catch (e) {
-      setLive(false);
-      return;
-    }
     try {
       const list = await api('/api/cases');
       list.forEach(c => { cases[c.id] = c; });
-    } catch (e) { /* fresh server, no cases yet */ }
-    renderQueue();
-
-    // Deep link from the intake form (submit.html?... redirects here as
-    // index.html?case=ID) -- select it and attach to its live stream.
-    const deepLinkId = new URLSearchParams(location.search).get('case');
-    if (deepLinkId && cases[deepLinkId]) {
-      selectedId = deepLinkId;
-      renderQueue();
-      renderCase();
-      if (['queued', 'running'].includes(cases[deepLinkId].status)) startStream(deepLinkId);
-    }
+      setLive(true);
+    } catch (e) { setLive(false); }
+    renderSidebar();
   }
-
   function setLive(ok) {
     document.getElementById('liveDot').className = 'live-dot ' + (ok ? 'on' : 'off');
     document.getElementById('liveText').textContent = ok ? 'Connected to Sentinel API' : 'API unreachable';
   }
 
-  // ---------------------------------------------------------- submit UI --
-  function renderSampleButtons() {
-    const el = document.getElementById('sampleButtons');
-    el.innerHTML = SAMPLES.map((s, i) => `
-      <button class="sample-btn" data-idx="${i}">
-        <span class="sb-title">${s.transaction.merchant}</span>
-        <span class="sb-meta">${s.transaction.id} · ${fmtMoney(s.transaction.amount, s.transaction.currency)} · ${s.transaction.channel}</span>
-      </button>
-    `).join('');
-    el.querySelectorAll('.sample-btn').forEach(btn => {
-      btn.addEventListener('click', () => submitCase(SAMPLES[+btn.dataset.idx]));
-    });
-
-    const textarea = document.getElementById('customJson');
-    textarea.value = JSON.stringify(SAMPLES[0] || { transaction: {}, customer_profile: {} }, null, 2);
-    document.getElementById('runCustomBtn').addEventListener('click', () => {
-      const errEl = document.getElementById('submitError');
-      errEl.textContent = '';
-      let payload;
-      try {
-        payload = JSON.parse(textarea.value);
-      } catch (e) {
-        errEl.textContent = 'Invalid JSON: ' + e.message;
-        return;
-      }
-      submitCase(payload).catch(e => { errEl.textContent = e.message; });
-    });
+  // ------------------------------------------------------------------ chat --
+  function appendMessage(role, html) {
+    const log = document.getElementById('chatLog');
+    const empty = log.querySelector('.chat-empty');
+    if (empty) empty.remove();
+    const row = document.createElement('div');
+    row.className = 'msg-row ' + role;
+    row.innerHTML = `<div class="bubble">${html}</div>`;
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+    return row.querySelector('.bubble');
   }
 
-  async function submitCase(sample) {
-    const errEl = document.getElementById('submitError');
-    errEl.textContent = '';
+  async function sendChat(text) {
+    const input = document.getElementById('chatInput');
+    const msg = (text ?? input.value).trim();
+    if (!msg) return;
+    input.value = '';
+    input.style.height = 'auto';
+    appendMessage('user', escapeHtml(msg));
+    chatHistory.push({ role: 'user', content: msg });
 
-    // Sample transactions have fixed IDs -- re-clicking a sample that's
-    // already been run would 409. Reopen the existing case instead.
-    const existingId = sample.transaction && sample.transaction.id;
-    if (existingId && cases[existingId]) {
-      selectedId = existingId;
-      renderQueue();
-      renderCase();
-      if (cases[existingId].status === 'queued' || cases[existingId].status === 'running') startStream(existingId);
-      return;
-    }
+    const sendBtn = document.getElementById('chatSend');
+    sendBtn.disabled = true;
+    const thinkingBubble = appendMessage('assistant', '<span class="thinking">Thinking…</span>');
 
     try {
-      const { id } = await api('/api/cases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transaction: sample.transaction, customer_profile: sample.customer_profile }),
+      const { reply, action } = await api('/api/assistant/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: chatHistory }),
       });
+      chatHistory.push({ role: 'assistant', content: reply });
+      thinkingBubble.innerHTML = formatReply(reply);
+      await handleAction(action, thinkingBubble.parentElement);
+    } catch (e) {
+      thinkingBubble.innerHTML = formatReply('Sorry, something went wrong: ' + e.message);
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  function resolveCaseId(action) {
+    if (action.case_id && cases[action.case_id]) return action.case_id;
+    if (action.merchant_hint) {
+      const hit = Object.values(cases).find(c => (c.transaction.merchant || '').toLowerCase().includes(action.merchant_hint.toLowerCase()));
+      if (hit) return hit.id;
+    }
+    return lastCaseId;
+  }
+
+  async function handleAction(action, chatRow) {
+    if (!action) return;
+
+    if (action.type === 'submit') {
+      const { id } = await api('/api/cases', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction: action.transaction, customer_profile: action.customer_profile }),
+      });
+      lastCaseId = id;
       cases[id] = {
-        id, transaction: sample.transaction, customer_profile: sample.customer_profile,
+        id, transaction: { ...action.transaction, id }, customer_profile: action.customer_profile,
         status: 'queued', route: [], findings: {}, risk_score: null, risk_factors: [],
         decision: null, narrative: null, audit_trail: [], created_at: Date.now() / 1000,
       };
-      selectedId = id;
-      renderQueue();
-      renderCase();
-      startStream(id);
-    } catch (e) {
-      errEl.textContent = 'Could not submit case: ' + e.message;
+      const card = document.createElement('div');
+      card.className = 'case-card';
+      chatRow.appendChild(card);
+      renderCaseCard(id, card);
+      startStream(id, card);
+      renderSidebar();
+      return;
+    }
+
+    if (action.type === 'lookup') {
+      const id = resolveCaseId(action);
+      if (!id || !cases[id]) {
+        appendMessage('assistant', formatReply("I don't see a case matching that -- try giving me the transaction ID."));
+        return;
+      }
+      try {
+        cases[id] = await api(`/api/cases/${id}`);
+      } catch (e) { /* use cached copy */ }
+      lastCaseId = id;
+      const card = document.createElement('div');
+      card.className = 'case-card';
+      chatRow.appendChild(card);
+      renderCaseCard(id, card);
+      return;
+    }
+
+    if (action.type === 'resume') {
+      const id = resolveCaseId(action);
+      if (!id || !cases[id]) {
+        appendMessage('assistant', formatReply("I don't have a case to act on -- which one did you mean?"));
+        return;
+      }
+      if (cases[id].status !== 'escalated') {
+        appendMessage('assistant', formatReply(`${id} isn't awaiting analyst review right now (status: ${statusLabel(cases[id].status)}).`));
+        return;
+      }
+      try {
+        const full = await api(`/api/cases/${id}/resume`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision: action.decision }),
+        });
+        cases[id] = full;
+        lastCaseId = id;
+        const card = document.createElement('div');
+        card.className = 'case-card';
+        chatRow.appendChild(card);
+        renderCaseCard(id, card);
+        renderSidebar();
+      } catch (e) {
+        appendMessage('assistant', formatReply('Could not resume that case: ' + e.message));
+      }
+      return;
+    }
+
+    if (action.type === 'list') {
+      let list = Object.values(cases);
+      if (action.status_filter) list = list.filter(c => c.status === action.status_filter);
+      list.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+      if (!list.length) {
+        appendMessage('assistant', formatReply('No matching cases.'));
+        return;
+      }
+      const html = list.slice(0, 8).map(c =>
+        `<div class="case-factor"><b>${escapeHtml(c.transaction.merchant || c.id)}</b> — ${fmtMoney(c.transaction.amount, c.transaction.currency)} — ${statusLabel(c.status)}${c.risk_score != null ? ' — score ' + c.risk_score : ''}</div>`
+      ).join('');
+      appendMessage('assistant', `<div class="case-card">${html}</div>`);
+      return;
     }
   }
 
-  // -------------------------------------------------------------- stream --
-  function startStream(id) {
+  // ------------------------------------------------------------ case cards --
+  function deriveNodeStates(c) {
+    const s = {};
+    s.supervisor = (c.route || []).length > 0 ? { status: 'done', note: `Routed to: ${c.route.join(', ')}` } : { status: 'running', note: '' };
+    PARALLEL.forEach(key => {
+      if (!(c.route || []).length) { s[key] = { status: 'pending', note: '' }; return; }
+      if (!c.route.includes(key)) { s[key] = { status: 'skip', note: 'Not required — fast-path' }; return; }
+      const f = c.findings[key];
+      if (!f) { s[key] = { status: 'running', note: 'Analyzing…' }; return; }
+      s[key] = { status: f.score == null ? 'na' : 'done', note: f.reason };
+    });
+    const allIn = (c.route || []).length > 0 && c.route.every(k => c.findings[k]);
+    s.aggregator = c.risk_score != null ? { status: 'done', note: `Composite ${c.risk_score}/100` } : { status: allIn ? 'running' : 'pending', note: '' };
+    if (c.status === 'escalated' && !c.decision) s.decision = { status: 'review', note: 'Escalated — awaiting analyst decision' };
+    else if (c.decision) s.decision = { status: 'done', note: c.decision === 'approve' ? 'Approved.' : c.decision === 'decline' ? 'Declined.' : `Decision: ${c.decision}` };
+    else s.decision = { status: c.risk_score != null ? 'running' : 'pending', note: '' };
+    if (c.narrative) s.narrative = { status: 'done', note: 'Case note generated.' };
+    else if (c.status === 'approve') s.narrative = { status: 'skip', note: 'Not required for auto-approved cases.' };
+    else s.narrative = { status: 'pending', note: '' };
+    return s;
+  }
+
+  function renderCaseCard(id, container) {
+    const c = cases[id];
+    if (!c) return;
+    const t = c.transaction;
+    const states = deriveNodeStates(c);
+    const order = ['supervisor', ...PARALLEL, 'aggregator', 'decision', 'narrative'];
+    const steps = order.map(k => {
+      const st = states[k];
+      return `<div class="case-step"><span class="dot ${st.status}"></span><span class="label">${NODE_LABELS[k]}</span><span class="detail">${escapeHtml(st.note || '')}</span></div>`;
+    }).join('');
+
+    const factorSource = (c.risk_factors && c.risk_factors.length) ? c.risk_factors : Object.entries(c.findings).map(([agent, f]) => ({ agent, score: f.score, reason: f.reason }));
+    const factorsHtml = factorSource.length
+      ? factorSource.map(f => `<div class="case-factor"><b>${NODE_LABELS[f.agent] || f.agent}</b> (${f.score ?? 'n/a'}): ${escapeHtml(f.reason || '')}</div>`).join('')
+      : '';
+
+    const scoreHtml = c.risk_score != null
+      ? `<div class="case-score-line">Risk score: <span class="score band-${bandFor(c.risk_score).key}">${c.risk_score}/100 (${bandFor(c.risk_score).label})</span></div>`
+      : '';
+
+    const canResume = c.status === 'escalated' && !c.decision;
+    const actionsHtml = canResume
+      ? `<div class="case-actions"><button class="btn approve" data-resume="approve">Approve</button><button class="btn decline" data-resume="decline">Decline</button></div>`
+      : '';
+
+    container.innerHTML = `
+      <div class="case-card-head"><span>${escapeHtml(t.merchant || t.id)}</span><span class="chip st-${c.status}">${statusLabel(c.status)}</span></div>
+      <div class="case-card-meta">${t.id} · ${fmtMoney(t.amount, t.currency)} · ${escapeHtml(t.geo || '')}</div>
+      <div class="case-steps">${steps}</div>
+      ${scoreHtml}
+      ${factorsHtml ? `<div class="case-factors">${factorsHtml}</div>` : ''}
+      ${c.narrative ? `<div class="case-narrative">${escapeHtml(c.narrative)}</div>` : ''}
+      ${actionsHtml}
+    `;
+    container.dataset.caseId = id;
+    if (canResume) {
+      container.querySelectorAll('[data-resume]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.closest('.case-actions').innerHTML = '<span class="thinking">Working…</span>';
+          try {
+            const full = await api(`/api/cases/${id}/resume`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ decision: btn.dataset.resume }),
+            });
+            cases[id] = full;
+            renderCaseCard(id, container);
+            renderSidebar();
+          } catch (e) {
+            appendMessage('assistant', formatReply('Could not resume: ' + e.message));
+          }
+        });
+      });
+    }
+  }
+
+  function startStream(id, card) {
     if (streaming.has(id)) return;
     streaming.add(id);
     const es = new EventSource(`${API}/api/cases/${id}/stream`);
-
-    es.addEventListener('update', (ev) => {
-      const { node, payload } = JSON.parse(ev.data);
-      applyUpdate(id, payload);
-      if (selectedId === id) renderCase();
-      renderQueue();
-    });
-
+    const apply = (update) => {
+      const c = cases[id];
+      if (update.findings) Object.assign(c.findings, update.findings);
+      if (update.route) c.route = update.route;
+      if (update.risk_score !== undefined) c.risk_score = update.risk_score;
+      if (update.risk_factors) c.risk_factors = update.risk_factors;
+      if (update.decision) c.decision = update.decision;
+      if (update.narrative) c.narrative = update.narrative;
+      if (c.status === 'queued') c.status = 'running';
+    };
+    es.addEventListener('update', (ev) => { apply(JSON.parse(ev.data).payload); renderCaseCard(id, card); renderSidebar(); });
     es.addEventListener('escalated', (ev) => {
-      const payload = JSON.parse(ev.data);
-      const c = cases[id];
-      if (c) {
-        c.status = 'escalated';
-        c.risk_score = payload.risk_score ?? c.risk_score;
-        c.risk_factors = payload.risk_factors ?? c.risk_factors;
-      }
-      if (selectedId === id) renderCase();
-      renderQueue();
+      const p = JSON.parse(ev.data);
+      cases[id].status = 'escalated'; cases[id].risk_score = p.risk_score ?? cases[id].risk_score; cases[id].risk_factors = p.risk_factors ?? cases[id].risk_factors;
+      renderCaseCard(id, card); renderSidebar();
     });
-
-    es.addEventListener('snapshot', (ev) => {
-      const snap = JSON.parse(ev.data);
-      cases[id] = snap;
-      if (selectedId === id) renderCase();
-      renderQueue();
+    es.addEventListener('snapshot', (ev) => { cases[id] = JSON.parse(ev.data); renderCaseCard(id, card); renderSidebar(); });
+    es.addEventListener('done', () => {
+      streaming.delete(id); es.close();
+      api(`/api/cases/${id}`).then(full => { cases[id] = full; renderCaseCard(id, card); renderSidebar(); }).catch(() => {});
     });
-
-    es.addEventListener('done', (ev) => {
-      streaming.delete(id);
-      es.close();
-      // Safety-net refetch for canonical final state.
-      api(`/api/cases/${id}`).then(full => {
-        cases[id] = full;
-        if (selectedId === id) renderCase();
-        renderQueue();
-      }).catch(() => {});
-    });
-
-    es.addEventListener('error', () => {
-      streaming.delete(id);
-      es.close();
-      const c = cases[id];
-      if (c && c.status !== 'error') { c.status = 'error'; }
-      if (selectedId === id) renderCase();
-      renderQueue();
-    });
+    es.addEventListener('error', () => { streaming.delete(id); es.close(); });
   }
 
-  function applyUpdate(id, update) {
-    const c = cases[id];
-    if (!c) return;
-    if (update.findings) Object.assign(c.findings, update.findings);
-    if (update.route) c.route = update.route;
-    if (update.risk_score !== undefined) c.risk_score = update.risk_score;
-    if (update.risk_factors) c.risk_factors = update.risk_factors;
-    if (update.decision) c.decision = update.decision;
-    if (update.narrative) c.narrative = update.narrative;
-    if (update.audit_trail) c.audit_trail = (c.audit_trail || []).concat(update.audit_trail);
-    if (c.status === 'queued') c.status = 'running';
-  }
+  document.getElementById('chatSend').addEventListener('click', () => sendChat());
+  document.getElementById('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
+  document.getElementById('chatInput').addEventListener('input', (e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px'; });
+  document.querySelectorAll('.suggestion-btn').forEach(btn => btn.addEventListener('click', () => sendChat(btn.dataset.msg)));
 
-  async function resumeCase(id, decision) {
+  // -------------------------------------------------------------- form panel --
+  const newCaseBtn = document.getElementById('newCaseBtn');
+  const formPanel = document.getElementById('formPanel');
+  newCaseBtn.addEventListener('click', () => {
+    formPanel.hidden = !formPanel.hidden;
+    newCaseBtn.textContent = formPanel.hidden ? '+ New case (guided form)' : '– Hide form';
+  });
+  document.getElementById('formSubmitBtn').addEventListener('click', async () => {
+    const errEl = document.getElementById('formError');
+    errEl.textContent = '';
+    const amount = parseFloat(document.getElementById('f-amount').value || '0');
+    const merchant = document.getElementById('f-merchant').value.trim();
+    if (!amount || !merchant) { errEl.textContent = 'Amount and merchant are required.'; return; }
+    const geo = document.getElementById('f-geo').value.trim() || 'Unknown';
+    const transaction = {
+      amount, currency: document.getElementById('f-currency').value, merchant,
+      category: document.getElementById('f-category').value, channel: document.getElementById('f-channel').value,
+      geo, home_geo: document.getElementById('f-home-geo').value.trim() || geo,
+      device_id: `dev-${Math.random().toString(16).slice(2, 10)}`,
+      device_new: document.getElementById('f-device-new').value === 'true',
+      ip_address: `203.0.113.${Math.floor(Math.random() * 254) + 1}`,
+      new_payee: document.getElementById('f-new-payee').value === 'true',
+    };
+    const customer_profile = {
+      account_id: `acct-${Math.random().toString(16).slice(2, 10)}`,
+      name: document.getElementById('f-name').value.trim() || 'Unspecified',
+      prior_flag_count: 0,
+    };
     try {
-      const full = await api(`/api/cases/${id}/resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decision }),
+      const { id } = await api('/api/cases', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction, customer_profile }),
       });
-      cases[id] = full;
-      renderCase();
-      renderQueue();
+      lastCaseId = id;
+      cases[id] = { id, transaction: { ...transaction, id }, customer_profile, status: 'queued', route: [], findings: {}, risk_score: null, risk_factors: [], decision: null, narrative: null, audit_trail: [], created_at: Date.now() / 1000 };
+      formPanel.hidden = true;
+      newCaseBtn.textContent = '+ New case (guided form)';
+      appendMessage('user', escapeHtml(`Submitted via form: ${merchant}, ${fmtMoney(amount, transaction.currency)}`));
+      const bubble = appendMessage('assistant', 'Running the review now…');
+      const card = document.createElement('div');
+      card.className = 'case-card';
+      bubble.appendChild(card);
+      renderCaseCard(id, card);
+      startStream(id, card);
+      renderSidebar();
     } catch (e) {
-      alert('Resume failed: ' + e.message);
+      errEl.textContent = e.message;
     }
+  });
+
+  // ---------------------------------------------------------------- sidebar --
+  function renderSidebar() {
+    renderStatTiles();
+    renderDecisionChart();
+    renderScoreTrend();
+    renderQueue();
   }
 
-  // -------------------------------------------------------------- queue --
-  function fmtMoney(n, ccy) {
-    n = Number(n || 0);
-    return (ccy === 'USD' ? '$' : '') + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function renderStatTiles() {
+    const list = Object.values(cases);
+    const counts = { total: list.length, escalated: 0, approve: 0, decline: 0 };
+    list.forEach(c => { if (c.status === 'escalated') counts.escalated++; else if (c.status === 'approve') counts.approve++; else if (c.status === 'decline') counts.decline++; });
+    const tiles = [
+      { label: 'Total', value: counts.total }, { label: 'Awaiting', value: counts.escalated },
+      { label: 'Approved', value: counts.approve }, { label: 'Declined', value: counts.decline },
+    ];
+    document.getElementById('statTiles').innerHTML = tiles.map(t => `<div class="stat-tile"><div class="stat-label">${t.label}</div><div class="stat-value tnum">${t.value}</div></div>`).join('');
   }
 
-  function statusLabel(status) {
-    return { queued: 'Queued', running: 'Running', escalated: 'Escalated', approve: 'Approved', decline: 'Declined', error: 'Error', interrupted: 'Interrupted' }[status] || status;
+  function renderDecisionChart() {
+    const list = Object.values(cases);
+    const counts = { approve: 0, decline: 0, escalated: 0, pending: 0 };
+    list.forEach(c => {
+      if (c.status === 'approve') counts.approve++;
+      else if (c.status === 'decline') counts.decline++;
+      else if (c.status === 'escalated') counts.escalated++;
+      else counts.pending++;
+    });
+    const rows = [
+      { key: 'approve', label: 'Approved', n: counts.approve },
+      { key: 'decline', label: 'Declined', n: counts.decline },
+      { key: 'escalated', label: 'Escalated', n: counts.escalated },
+      { key: 'pending', label: 'In progress', n: counts.pending },
+    ];
+    const max = Math.max(1, ...rows.map(r => r.n));
+    document.getElementById('decisionChart').innerHTML = rows.map(r => `
+      <div class="bar-row">
+        <span>${r.label}</span>
+        <div class="bar-track"><div class="bar-fill st-${r.key}" style="width:${(r.n / max) * 100}%"></div></div>
+        <span class="bar-count tnum">${r.n}</span>
+      </div>`).join('');
   }
 
-  const SERVABLE_REFERENCE_FILES = ['compliance_policy.md', 'amount_baseline.json'];
-  function referenceLink(path) {
-    const filename = path.split('/').pop();
-    if (SERVABLE_REFERENCE_FILES.includes(filename)) {
-      return `<a href="/api/reference/${filename}" target="_blank" rel="noopener">${path}</a>`;
-    }
-    return path;
+  function renderScoreTrend() {
+    const el = document.getElementById('scoreTrend');
+    const list = Object.values(cases).filter(c => c.risk_score != null).sort((a, b) => (a.created_at || 0) - (b.created_at || 0)).slice(-12);
+    if (list.length < 2) { el.innerHTML = '<div class="trend-empty">Not enough scored cases yet.</div>'; return; }
+
+    const w = 300, h = 90, pad = 8;
+    const xStep = (w - pad * 2) / (list.length - 1);
+    const yFor = (score) => pad + (1 - score / 100) * (h - pad * 2);
+    const points = list.map((c, i) => [pad + i * xStep, yFor(c.risk_score)]);
+    const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+
+    const dots = points.map((p, i) => {
+      const c = list[i];
+      return `<circle class="trend-dot" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3">
+        <title>${escapeHtml(c.transaction.merchant || c.id)}: ${c.risk_score}/100</title>
+      </circle>`;
+    }).join('');
+
+    el.innerHTML = `
+      <svg class="trend-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+        <line class="trend-threshold" x1="${pad}" y1="${yFor(25).toFixed(1)}" x2="${w - pad}" y2="${yFor(25).toFixed(1)}"/>
+        <line class="trend-threshold" x1="${pad}" y1="${yFor(90).toFixed(1)}" x2="${w - pad}" y2="${yFor(90).toFixed(1)}"/>
+        <text class="trend-axis-label" x="${pad}" y="${(yFor(25) - 2).toFixed(1)}">approve ≤25</text>
+        <text class="trend-axis-label" x="${pad}" y="${(yFor(90) - 2).toFixed(1)}">decline ≥90</text>
+        <path class="trend-line" d="${path}"/>
+        ${dots}
+      </svg>`;
   }
 
   function bandKeyForCase(c) {
@@ -431,202 +638,22 @@
     const list = Object.values(cases).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
     document.getElementById('queueCount').textContent = list.length;
     const el = document.getElementById('queueList');
-    if (!list.length) {
-      el.innerHTML = '<div class="queue-empty">No cases yet — submit one above.</div>';
-      return;
-    }
-    el.innerHTML = list.map(c => `
-      <button class="queue-item ${c.id === selectedId ? 'active' : ''}" data-id="${c.id}">
-        <span class="stripe band-${bandKeyForCase(c)}"></span>
+    if (!list.length) { el.innerHTML = '<div class="queue-empty">No cases yet.</div>'; return; }
+    el.innerHTML = list.map(c => {
+      const bk = bandKeyForCase(c);
+      const stripeColor = bk === 'pending' ? 'var(--line)' : `var(--${bk})`;
+      return `
+      <button class="queue-item" data-id="${c.id}">
+        <span class="stripe" style="background:${stripeColor}"></span>
         <span class="qi-body">
-          <span class="qi-top"><span class="qi-id">${c.id}</span></span>
-          <span class="qi-merchant">${c.transaction.merchant || c.transaction.id}</span>
-          <span class="qi-meta">
-            <span class="qi-amount tnum">${fmtMoney(c.transaction.amount, c.transaction.currency)}</span>
-            <span class="chip st-${c.status}">${statusLabel(c.status)}</span>
-          </span>
+          <span class="qi-merchant">${escapeHtml(c.transaction.merchant || c.id)}</span>
+          <span class="qi-meta"><span>${fmtMoney(c.transaction.amount, c.transaction.currency)}</span><span class="chip st-${c.status}">${statusLabel(c.status)}</span></span>
         </span>
-      </button>
-    `).join('');
+      </button>`;
+    }).join('');
     el.querySelectorAll('.queue-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectedId = btn.dataset.id;
-        renderQueue();
-        renderCase();
-        if (cases[selectedId].status === 'queued' || cases[selectedId].status === 'running') startStream(selectedId);
-      });
+      btn.addEventListener('click', () => sendChat(`Show me case ${btn.dataset.id}`));
     });
-  }
-
-  // ---------------------------------------------------------- case view --
-  function deriveNodeStates(c) {
-    const s = {};
-    const started = (c.route || []).length > 0 || c.status !== 'queued';
-    s.supervisor = (c.route || []).length > 0
-      ? { status: 'done', note: `Routed to: ${c.route.join(', ')}` }
-      : { status: started ? 'running' : 'pending', note: '' };
-
-    PARALLEL.forEach(key => {
-      if (!(c.route || []).length) { s[key] = { status: 'pending', note: '' }; return; }
-      if (!c.route.includes(key)) { s[key] = { status: 'skip', note: 'Not required — fast-path' }; return; }
-      const f = c.findings[key];
-      if (!f) { s[key] = { status: 'running', note: 'Analyzing…' }; return; }
-      if (f.score === null || f.score === undefined) { s[key] = { status: 'na', note: f.reason }; return; }
-      s[key] = { status: 'done', note: f.reason };
-    });
-
-    const allIn = (c.route || []).length > 0 && c.route.every(k => c.findings[k]);
-    s.aggregator = c.risk_score != null
-      ? { status: 'done', note: `Composite ${c.risk_score}/100` }
-      : { status: allIn ? 'running' : 'pending', note: allIn ? 'Aggregating findings…' : '' };
-
-    if (c.status === 'escalated' && !c.decision) {
-      s.decision = { status: 'review', note: 'Escalated — awaiting analyst decision' };
-    } else if (c.decision) {
-      const label = c.decision === 'approve' ? 'Approved.' : c.decision === 'decline' ? 'Declined.' : `Decision: ${c.decision}`;
-      s.decision = { status: 'done', note: label };
-    } else {
-      s.decision = { status: c.risk_score != null ? 'running' : 'pending', note: c.risk_score != null ? 'Routing…' : '' };
-    }
-
-    if (c.narrative) {
-      s.narrative = { status: 'done', note: 'Case note generated.' };
-    } else if (c.status === 'approve') {
-      s.narrative = { status: 'skip', note: 'Not required for auto-approved cases.' };
-    } else if (c.decision === 'decline' || c.status === 'escalated' && c.decision) {
-      s.narrative = { status: 'running', note: 'Writing case note…' };
-    } else {
-      s.narrative = { status: 'pending', note: '' };
-    }
-    return s;
-  }
-
-  function pfNode(key, st, extraClass) {
-    st = st || { status: 'pending', note: '' };
-    return `
-      <div class="pf-node ${st.status} ${extraClass || ''}">
-        <div class="pf-node-top">
-          <span class="pf-node-label">${NODE_META[key]}</span>
-          <span class="status-dot ${st.status}"></span>
-        </div>
-        <span class="pf-node-note">${st.note || ''}</span>
-      </div>`;
-  }
-
-  function riskScoreLine(score) {
-    if (score == null) return `<span class="risk-score-line">Risk score: <span class="score">awaiting…</span></span>`;
-    const band = bandFor(score);
-    return `<span class="risk-score-line">Risk score: <span class="score band-${band.key}">${score}/100 (${band.label})</span></span>`;
-  }
-
-  function renderCase() {
-    const col = document.getElementById('caseCol');
-    const c = cases[selectedId];
-    if (!c) {
-      col.innerHTML = '<div class="panel empty-state">Select or submit a case to see the agent pipeline run live.</div>';
-      return;
-    }
-    const states = deriveNodeStates(c);
-    const t = c.transaction, p = c.customer_profile || {};
-    const factorSource = (c.risk_factors && c.risk_factors.length)
-      ? c.risk_factors
-      : Object.entries(c.findings).map(([agent, f]) => ({ agent, score: f.score, reason: f.reason, citations: f.citations || [] }));
-    const sortedFactors = [...factorSource].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
-
-    const canResume = c.status === 'escalated' && !c.decision;
-
-    col.innerHTML = `
-      <section class="panel case-head">
-        <div class="case-head-top">
-          <div>
-            <div class="case-title-row">
-              <span class="case-merchant">${t.merchant || t.id}</span>
-              <span class="chip st-${c.status}">${statusLabel(c.status)}</span>
-            </div>
-            <span class="case-id">${t.id} · ${t.category || ''}</span>
-            <div class="case-meta">
-              <div class="meta-item"><span class="meta-label">Channel</span><span class="meta-value">${t.channel || '—'}</span></div>
-              <div class="meta-item"><span class="meta-label">Origin</span><span class="meta-value">${t.geo || '—'}${t.home_geo ? ' (home: ' + t.home_geo + ')' : ''}</span></div>
-              <div class="meta-item"><span class="meta-label">Device</span><span class="meta-value">${t.device_new ? 'New / unrecognized' : 'Known device'}</span></div>
-              <div class="meta-item"><span class="meta-label">Account</span><span class="meta-value mono">${p.account_id || '—'}</span></div>
-            </div>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
-            <span class="case-amount tnum">${fmtMoney(t.amount, t.currency)}</span>
-            ${riskScoreLine(c.risk_score)}
-            <div class="case-actions">
-              ${canResume ? `
-                <button class="btn approve" data-act="approve">Approve</button>
-                <button class="btn decline" data-act="decline">Decline</button>
-              ` : `<span class="action-note">${c.decision ? 'Case closed.' : 'Pipeline in progress…'}</span>`}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div class="case-grid">
-        <div style="display:flex;flex-direction:column;gap:16px;">
-          <section class="panel pipeline-card">
-            <div class="panel-head"><h2>Agent pipeline (live)</h2></div>
-            <div class="pf">
-              ${pfNode('supervisor', states.supervisor, 'solo')}
-              <div class="pf-stem"></div>
-              <div class="pf-parallel-wrap"><div class="pf-parallel">
-                ${PARALLEL.map(k => pfNode(k, states[k])).join('')}
-              </div></div>
-              <div class="pf-stem"></div>
-              ${pfNode('aggregator', states.aggregator, 'solo')}
-              <div class="pf-stem"></div>
-              ${pfNode('decision', states.decision, 'solo')}
-              <div class="pf-stem"></div>
-              ${pfNode('narrative', states.narrative, 'solo')}
-            </div>
-          </section>
-
-          <section class="panel factors-card">
-            <div class="panel-head"><h2>Risk factors</h2></div>
-            ${sortedFactors.length ? sortedFactors.map(f => {
-              const b = f.score == null ? 'na' : bandFor(f.score).key;
-              const citations = f.citations || [];
-              return `
-              <div class="factor-row">
-                <div class="factor-label">
-                  <span class="factor-name">${NODE_META[f.agent] || f.agent}: ${f.reason || ''}</span>
-                  <div class="factor-track"><div class="factor-fill band-${b}" style="width:${f.score ?? 0}%"></div></div>
-                  ${citations.length ? `
-                    <details class="sources">
-                      <summary>Sources (${citations.length})</summary>
-                      ${citations.map(c => `
-                        <div class="citation">
-                          <span class="citation-label">${c.label}</span>
-                          <span class="citation-source">${c.source}</span>
-                          <span>${c.excerpt}</span>
-                          ${c.path ? `<span class="citation-path">${referenceLink(c.path)}</span>` : ''}
-                        </div>
-                      `).join('')}
-                    </details>
-                  ` : ''}
-                </div>
-                <span class="factor-score tnum">${f.score ?? '—'}</span>
-              </div>`;
-            }).join('') : '<div class="placeholder">Awaiting subagent findings…</div>'}
-          </section>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:16px;">
-          <section class="panel narrative-card">
-            <div class="panel-head"><h2>Analyst narrative</h2></div>
-            <p class="narrative-body">${c.narrative || '<span class="placeholder">Not yet generated.</span>'}</p>
-          </section>
-        </div>
-      </div>
-    `;
-
-    if (canResume) {
-      col.querySelectorAll('.case-actions .btn').forEach(btn => {
-        btn.addEventListener('click', () => resumeCase(c.id, btn.dataset.act));
-      });
-    }
   }
 
   boot();
