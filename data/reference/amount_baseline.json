@@ -1,0 +1,92 @@
+{
+  "source": "ULB Machine Learning Group / Worldline \"Credit Card Fraud Detection\" dataset (Dal Pozzolo et al.), European cardholders, September 2013 -- real anonymized transactions, fetched via GitHub mirror of the Kaggle dataset.",
+  "n_transactions": 284807,
+  "n_fraud": 492,
+  "overall_fraud_rate": 0.001727,
+  "amount_percentiles": {
+    "10": 1.0,
+    "25": 5.6,
+    "50": 22.0,
+    "75": 77.17,
+    "90": 203.0,
+    "95": 365.0,
+    "97.5": 597.8,
+    "99": 1018.0,
+    "99.5": 1457.0,
+    "99.9": 3000.0
+  },
+  "fraud_rate_by_amount_bucket": [
+    {
+      "min": 0,
+      "max": 10,
+      "count": 97314,
+      "fraud_count": 249,
+      "fraud_rate": 0.00256
+    },
+    {
+      "min": 10,
+      "max": 25,
+      "count": 51652,
+      "fraud_count": 26,
+      "fraud_rate": 0.0005
+    },
+    {
+      "min": 25,
+      "max": 50,
+      "count": 40738,
+      "fraud_count": 30,
+      "fraud_rate": 0.00074
+    },
+    {
+      "min": 50,
+      "max": 100,
+      "count": 37718,
+      "fraud_count": 57,
+      "fraud_rate": 0.00151
+    },
+    {
+      "min": 100,
+      "max": 250,
+      "count": 34482,
+      "fraud_count": 56,
+      "fraud_rate": 0.00162
+    },
+    {
+      "min": 250,
+      "max": 500,
+      "count": 13411,
+      "fraud_count": 39,
+      "fraud_rate": 0.00291
+    },
+    {
+      "min": 500,
+      "max": 1000,
+      "count": 6423,
+      "fraud_count": 26,
+      "fraud_rate": 0.00405
+    },
+    {
+      "min": 1000,
+      "max": 2000,
+      "count": 2378,
+      "fraud_count": 8,
+      "fraud_rate": 0.00336
+    },
+    {
+      "min": 2000,
+      "max": 5000,
+      "count": 636,
+      "fraud_count": 1,
+      "fraud_rate": 0.00157
+    },
+    {
+      "min": 5000,
+      "max": null,
+      "count": 55,
+      "fraud_count": 0,
+      "fraud_rate": 0.0
+    }
+  ],
+  "mean_amount": 88.35,
+  "stdev_amount": 250.12
+}

@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel — New Case Intake</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .workspace{display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:start;}
+
+  .form-card{padding:18px 20px 22px;}
+  fieldset{border:1px solid var(--line);border-radius:10px;padding:14px 16px 16px;margin:0 0 16px;}
+  fieldset legend{padding:0 6px;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-3);}
+  .field-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field.full{grid-column:1 / -1;}
+  .field label{font-size:12px;color:var(--text-2);}
+  .field .hint{font-size:11px;color:var(--text-3);}
+  .field input, .field select{
+    background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:9px 10px;font-size:13px;
+  }
+  .field input:focus, .field select:focus{border-color:var(--signal);}
+  .field input:user-invalid{border-color:var(--critical);}
+  .form-actions{display:flex;align-items:center;gap:12px;margin-top:4px;}
+  .form-error{font-size:12px;color:var(--critical);}
+  .form-success{
+    font-size:13px;color:var(--good);background:var(--good-bg);border:1px solid var(--good);
+    border-radius:9px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  }
+  .form-success a{color:var(--good);font-weight:600;}
+
+  /* ---- chat panel ---- */
+  .chat-card{display:flex;flex-direction:column;height:calc(100vh - 110px);position:sticky;top:18px;}
+  .chat-head{padding:14px 16px 10px;border-bottom:1px solid var(--line);}
+  .chat-head h2{font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);margin:0;}
+  .chat-head p{margin:4px 0 0;font-size:11.5px;color:var(--text-3);}
+  .chat-log{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px;}
+  .msg{max-width:92%;font-size:13px;line-height:1.5;padding:9px 12px;border-radius:10px;}
+  .msg.user{align-self:flex-end;background:var(--signal-bg);color:var(--text);border:1px solid transparent;}
+  .msg.assistant{align-self:flex-start;background:var(--surface-raised);color:var(--text-2);border:1px solid var(--line);}
+  .msg.thinking{align-self:flex-start;color:var(--text-3);font-style:italic;}
+  .chat-empty{font-size:12.5px;color:var(--text-3);padding:6px 2px;}
+  .chat-input-row{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);}
+  .chat-input-row textarea{
+    flex:1;resize:none;background:var(--ink);color:var(--text);border:1px solid var(--line);
+    border-radius:9px;padding:9px 11px;font-size:13px;font-family:inherit;min-height:40px;max-height:120px;
+  }
+  .chat-input-row textarea:focus{border-color:var(--signal);}
+  .chat-send{font-size:12.5px;font-weight:600;color:var(--signal);background:var(--signal-bg);
+    border:1px solid transparent;border-radius:9px;padding:0 16px;cursor:pointer;}
+  .chat-send:hover:not(:disabled){background:var(--signal);color:var(--ink);}
+  .chat-send:disabled{opacity:0.4;cursor:default;}
+
+  @media (max-width: 980px){
+    .workspace{grid-template-columns:1fr;}
+    .field-grid{grid-template-columns:1fr;}
+    .chat-card{height:520px;position:static;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5.5V11c0 5.6 3.4 9.9 8 11 4.6-1.1 8-5.4 8-11V5.5L12 2z" stroke="#2563EB" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12.2l2.4 2.4 4.6-4.9" stroke="#2563EB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="wordmark">SENTINEL</span>
+      </div>
+      <span class="tagline">Payment fraud command center</span>
+    </div>
+    <nav class="page-nav">
+      <a href="index.html">Dashboard</a>
+      <a href="submit.html" class="active">New case (guided form)</a>
+      <a href="logs.html">Agent log</a>
+    </nav>
+  </header>
+
+  <div class="workspace">
+    <section class="panel form-card">
+      <div class="panel-head"><h2>Submit a transaction for review</h2></div>
+      <form id="caseForm">
+        <fieldset>
+          <legend>Transaction</legend>
+          <div class="field-grid">
+            <div class="field">
+              <label for="f-id">Transaction ID</label>
+              <input id="f-id" name="id" type="text" placeholder="auto-generated if blank">
+            </div>
+            <div class="field">
+              <label for="f-merchant">Merchant / payee *</label>
+              <input id="f-merchant" name="merchant" type="text" required>
+            </div>
+            <div class="field">
+              <label for="f-amount">Amount *</label>
+              <input id="f-amount" name="amount" type="number" min="0.01" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="f-currency">Currency</label>
+              <select id="f-currency" name="currency">
+                <option>USD</option><option>EUR</option><option>GBP</option><option>CAD</option><option>INR</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-category">Category</label>
+              <select id="f-category" name="category">
+                <option value="electronics">Electronics</option>
+                <option value="grocery">Grocery</option>
+                <option value="travel">Travel</option>
+                <option value="dining">Dining</option>
+                <option value="wire">Wire</option>
+                <option value="jewelry">Jewelry</option>
+                <option value="other">Other</option>
+              </select>
+              <span class="hint">Affects the behavioral-baseline comparison.</span>
+            </div>
+            <div class="field">
+              <label for="f-channel">Channel</label>
+              <select id="f-channel" name="channel">
+                <option value="ecommerce">E-commerce</option>
+                <option value="card_present">Card present</option>
+                <option value="wire_transfer">Wire transfer</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-geo">Origin location *</label>
+              <input id="f-geo" name="geo" type="text" placeholder="e.g. Lagos, NG" required>
+            </div>
+            <div class="field">
+              <label for="f-home-geo">Account home location *</label>
+              <input id="f-home-geo" name="home_geo" type="text" placeholder="e.g. Columbus, OH" required>
+            </div>
+            <div class="field">
+              <label for="f-device-id">Device ID</label>
+              <input id="f-device-id" name="device_id" type="text" placeholder="e.g. dev-9a21">
+            </div>
+            <div class="field">
+              <label for="f-device-new">Device recognized on this account?</label>
+              <select id="f-device-new" name="device_new"><option value="false">Known device</option><option value="true">New / unrecognized</option></select>
+            </div>
+            <div class="field">
+              <label for="f-ip">IP address</label>
+              <input id="f-ip" name="ip_address" type="text" placeholder="e.g. 197.210.54.12">
+            </div>
+            <div class="field">
+              <label for="f-new-payee">New payee?</label>
+              <select id="f-new-payee" name="new_payee"><option value="false">No</option><option value="true">Yes</option></select>
+              <span class="hint">Most relevant for wire transfers.</span>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Customer profile</legend>
+          <div class="field-grid">
+            <div class="field">
+              <label for="f-account-id">Account ID *</label>
+              <input id="f-account-id" name="account_id" type="text" required>
+            </div>
+            <div class="field">
+              <label for="f-name">Account holder / business name *</label>
+              <input id="f-name" name="name" type="text" required>
+            </div>
+            <div class="field">
+              <label for="f-prior-flags">Prior fraud flags on this account</label>
+              <input id="f-prior-flags" name="prior_flag_count" type="number" min="0" step="1" value="0">
+              <span class="hint">Any non-zero count forces the full review (both agents).</span>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary" id="submitBtn">Submit for review</button>
+          <span class="form-error" id="formError"></span>
+        </div>
+        <div class="form-success" id="formSuccess" style="display:none;">
+          <span id="formSuccessText"></span>
+          <a href="#" id="viewCaseLink">View in dashboard →</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel chat-card">
+      <div class="chat-head">
+        <h2>Ask about the requirements</h2>
+        <p>Not sure what a field means or how it affects the review? Ask here.</p>
+      </div>
+      <div class="chat-log" id="chatLog">
+        <div class="chat-empty">e.g. "What does device_new affect?" or "Is $2,340 on a new device risky?"</div>
+      </div>
+      <div class="chat-input-row">
+        <textarea id="chatInput" placeholder="Ask a question…" rows="1"></textarea>
+        <button class="chat-send" id="chatSend">Send</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  const API = "";
+  let chatHistory = []; // {role, content}
+
+  async function api(path, opts) {
+    const res = await fetch(API + path, opts);
+    if (!res.ok) throw new Error((await res.text()) || res.statusText);
+    return res.json();
+  }
+
+  // ---------------------------------------------------------------- form --
+  function currentFormSnapshot() {
+    const form = document.getElementById('caseForm');
+    const fd = new FormData(form);
+    const obj = {};
+    fd.forEach((v, k) => { obj[k] = v; });
+    return obj;
+  }
+
+  function buildPayload() {
+    const v = currentFormSnapshot();
+    const transaction = {
+      amount: parseFloat(v.amount || '0'),
+      currency: v.currency,
+      merchant: v.merchant,
+      category: v.category,
+      channel: v.channel,
+      geo: v.geo,
+      home_geo: v.home_geo,
+      device_id: v.device_id || null,
+      device_new: v.device_new === 'true',
+      ip_address: v.ip_address || null,
+      new_payee: v.new_payee === 'true',
+    };
+    if (v.id) transaction.id = v.id;
+    const customer_profile = {
+      account_id: v.account_id,
+      name: v.name,
+      prior_flag_count: parseInt(v.prior_flag_count || '0', 10),
+    };
+    return { transaction, customer_profile };
+  }
+
+  document.getElementById('caseForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('formError');
+    const successEl = document.getElementById('formSuccess');
+    const btn = document.getElementById('submitBtn');
+    errEl.textContent = '';
+    successEl.style.display = 'none';
+    btn.disabled = true;
+    try {
+      const payload = buildPayload();
+      const { id } = await api('/api/cases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      document.getElementById('formSuccessText').textContent = `Case ${id} submitted — the pipeline is running now.`;
+      document.getElementById('viewCaseLink').href = `index.html?case=${encodeURIComponent(id)}`;
+      successEl.style.display = 'flex';
+    } catch (err) {
+      errEl.textContent = 'Could not submit: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ---------------------------------------------------------------- chat --
+  function renderChat() {
+    const log = document.getElementById('chatLog');
+    if (!chatHistory.length) {
+      log.innerHTML = '<div class="chat-empty">e.g. "What does device_new affect?" or "Is $2,340 on a new device risky?"</div>';
+      return;
+    }
+    log.innerHTML = chatHistory.map(m => `<div class="msg ${m.role}">${escapeHtml(m.content)}</div>`).join('');
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  async function sendChat() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    const sendBtn = document.getElementById('chatSend');
+    chatHistory.push({ role: 'user', content: text });
+    input.value = '';
+    renderChat();
+    sendBtn.disabled = true;
+
+    const log = document.getElementById('chatLog');
+    const thinkingEl = document.createElement('div');
+    thinkingEl.className = 'msg thinking';
+    thinkingEl.textContent = 'Thinking…';
+    log.appendChild(thinkingEl);
+    log.scrollTop = log.scrollHeight;
+
+    try {
+      const { reply } = await api('/api/assistant/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: chatHistory, form_snapshot: currentFormSnapshot() }),
+      });
+      chatHistory.push({ role: 'assistant', content: reply });
+    } catch (err) {
+      chatHistory.push({ role: 'assistant', content: 'Sorry, I ran into an error: ' + err.message });
+    } finally {
+      sendBtn.disabled = false;
+      renderChat();
+    }
+  }
+
+  document.getElementById('chatSend').addEventListener('click', sendChat);
+  document.getElementById('chatInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  });
+  document.getElementById('chatInput').addEventListener('input', (e) => {
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+  });
+})();
+</script>
+</body>
+</html>

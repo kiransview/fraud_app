@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(artifact-design)",
+      "Skill(dataviz)",
+      "Bash(node scripts/validate_palette.js \"#1BAF7A,#EDA100,#EC835A,#E5484D\" --mode dark --surface \"#121C30\")",
+      "Bash(node scripts/validate_palette.js --help)",
+      "Bash(node scripts/validate_palette.js \"#1BAF7A,#EDA100,#EC835A,#E5484D\" --mode dark --surface \"#121C30\" --status)",
+      "Bash(node scripts/validate_palette.js \"#0ca30c,#fab219,#ec835a,#d03b3b\" --mode dark --surface \"#121C30\")",
+      "Bash(node scripts/validate_palette.js \"#2FD9C4,#256abf\" --mode dark --surface \"#121C30\")",
+      "Artifact",
+      "Bash(cd *)",
+      "Bash(python -m venv .venv)",
+      "Bash(\".venv/Scripts/python.exe\" -m pip install --quiet --upgrade pip)",
+      "Bash(\".venv/Scripts/python.exe\" -m pip install --quiet -r requirements.txt)",
+      "Bash(unset ANTHROPIC_API_KEY)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(\".venv/Scripts/python.exe\" -m pip install --quiet langchain-together)",
+      "Bash(\".venv/Scripts/python.exe\" -c \"from langchain_together import ChatTogether; import inspect; print\\(inspect.signature\\(ChatTogether.__init__\\)\\)\")",
+      "Bash(unset TOGETHER_API_KEY)",
+      "Bash(\".venv/Scripts/python.exe\" -m pip uninstall --quiet -y langchain-anthropic anthropic)",
+      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -c ' *)",
+      "Bash(\".venv/Scripts/python.exe\" run.py)"
+    ]
+  }
+}

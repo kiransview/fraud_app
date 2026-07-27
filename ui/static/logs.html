@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel — Agent Log</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .workspace{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start;}
+
+  .queue-list{display:flex;flex-direction:column;padding:2px 8px 10px;max-height:calc(100vh - 130px);min-height:120px;overflow-y:auto;}
+  .queue-empty{padding:20px 12px;font-size:12.5px;color:var(--text-3);}
+  .queue-item{
+    display:flex;align-items:stretch;gap:10px;padding:11px 10px 11px 12px;margin:2px 0;border-radius:10px;
+    cursor:pointer;border:1px solid transparent;background:none;text-align:left;width:100%;position:relative;
+  }
+  .queue-item:hover{background:var(--surface-hover);}
+  .queue-item.active{background:var(--surface-raised);border-color:var(--line);}
+  .queue-item.active::before{content:'';position:absolute;left:-1px;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--signal);}
+  .qi-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;}
+  .qi-id{font-family:var(--font-mono);font-size:11px;color:var(--text-3);}
+  .qi-merchant{font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .qi-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .qi-amount{font-family:var(--font-mono);font-size:13px;color:var(--text-2);}
+
+  .empty-state{padding:60px 20px;text-align:center;color:var(--text-3);font-size:13.5px;}
+  .log-head{padding:18px 20px;}
+  .log-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .log-merchant{font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--text);}
+  .log-id{font-family:var(--font-mono);font-size:12px;color:var(--text-3);margin-top:2px;}
+  .log-summary{display:flex;flex-wrap:wrap;gap:20px;margin-top:12px;}
+  .summary-item{display:flex;flex-direction:column;gap:2px;}
+  .summary-item .label{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-3);}
+  .summary-item .value{font-size:13px;color:var(--text-2);}
+  .summary-item .value.mono{font-family:var(--font-mono);}
+
+  .log-card{padding:8px 0 18px;}
+  .log-list{display:flex;flex-direction:column;}
+  .log-row{
+    display:grid;grid-template-columns:88px 150px 1fr 60px;gap:14px;align-items:baseline;
+    padding:11px 20px;border-bottom:1px solid var(--line-soft);
+  }
+  .log-row:last-child{border-bottom:none;}
+  .log-time{font-family:var(--font-mono);font-size:11.5px;color:var(--text-3);white-space:nowrap;}
+  .log-node{font-size:12.5px;font-weight:600;color:var(--text);}
+  .log-detail{font-size:13px;color:var(--text-2);line-height:1.5;}
+  .log-delta{font-family:var(--font-mono);font-size:11px;color:var(--text-3);text-align:right;white-space:nowrap;}
+  .log-row.pending .log-time{color:var(--text-3);}
+  .log-row.pending .log-detail{color:var(--text-3);font-style:italic;}
+  .log-empty{padding:40px 20px;text-align:center;color:var(--text-3);font-size:13px;}
+
+  @media (max-width: 900px){
+    .workspace{grid-template-columns:1fr;}
+    .log-row{grid-template-columns:1fr;gap:4px;}
+    .log-delta{text-align:left;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5.5V11c0 5.6 3.4 9.9 8 11 4.6-1.1 8-5.4 8-11V5.5L12 2z" stroke="#2563EB" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12.2l2.4 2.4 4.6-4.9" stroke="#2563EB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="wordmark">SENTINEL</span>
+      </div>
+      <span class="tagline">Payment fraud command center</span>
+    </div>
+    <nav class="page-nav">
+      <a href="index.html">Dashboard</a>
+      <a href="submit.html">New case (guided form)</a>
+      <a href="logs.html" class="active">Agent log</a>
+    </nav>
+  </header>
+
+  <div class="workspace">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Cases</h2>
+        <span class="count-chip" id="queueCount">0</span>
+      </div>
+      <div class="queue-list" id="queueList"><div class="queue-empty">No cases yet.</div></div>
+    </section>
+
+    <section class="log-col" id="logCol">
+      <div class="panel empty-state">Select a case to see exactly what each agent did, in order.</div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  const API = "";
+  const NODE_LABELS = {
+    supervisor: 'Supervisor',
+    risk_analysis: 'Risk Analysis',
+    compliance: 'Compliance',
+    aggregator: 'Risk Aggregator',
+    decision: 'Decision Router',
+    human_review: 'Analyst Decision',
+    narrative: 'Narrative Agent',
+  };
+
+  let cases = {};
+  let selectedId = null;
+  const streaming = new Set();
+
+  async function api(path, opts) {
+    const res = await fetch(API + path, opts);
+    if (!res.ok) throw new Error((await res.text()) || res.statusText);
+    return res.json();
+  }
+
+  function fmtMoney(n, ccy) {
+    n = Number(n || 0);
+    return (ccy === 'USD' ? '$' : '') + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function statusLabel(status) {
+    return { queued: 'Queued', running: 'Running', escalated: 'Escalated', approve: 'Approved', decline: 'Declined', error: 'Error', interrupted: 'Interrupted' }[status] || status;
+  }
+
+  async function boot() {
+    try {
+      const list = await api('/api/cases');
+      list.forEach(c => { cases[c.id] = c; });
+    } catch (e) { /* fresh server, no cases yet */ }
+    renderQueue();
+
+    const deepLinkId = new URLSearchParams(location.search).get('case');
+    if (deepLinkId && cases[deepLinkId]) {
+      selectedId = deepLinkId;
+      renderQueue();
+      renderLog();
+      if (['queued', 'running'].includes(cases[deepLinkId].status)) startStream(deepLinkId);
+    }
+  }
+
+  function renderQueue() {
+    const list = Object.values(cases).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    document.getElementById('queueCount').textContent = list.length;
+    const el = document.getElementById('queueList');
+    if (!list.length) {
+      el.innerHTML = '<div class="queue-empty">No cases yet.</div>';
+      return;
+    }
+    el.innerHTML = list.map(c => `
+      <button class="queue-item ${c.id === selectedId ? 'active' : ''}" data-id="${c.id}">
+        <span class="qi-body">
+          <span class="qi-id">${c.id}</span>
+          <span class="qi-merchant">${c.transaction.merchant || c.transaction.id}</span>
+          <span class="qi-meta">
+            <span class="qi-amount tnum">${fmtMoney(c.transaction.amount, c.transaction.currency)}</span>
+            <span class="chip st-${c.status}">${statusLabel(c.status)}</span>
+          </span>
+        </span>
+      </button>
+    `).join('');
+    el.querySelectorAll('.queue-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedId = btn.dataset.id;
+        renderQueue();
+        renderLog();
+        if (['queued', 'running'].includes(cases[selectedId].status)) startStream(selectedId);
+      });
+    });
+  }
+
+  function startStream(id) {
+    if (streaming.has(id)) return;
+    streaming.add(id);
+    const es = new EventSource(`${API}/api/cases/${id}/stream`);
+
+    es.addEventListener('update', (ev) => {
+      const { payload } = JSON.parse(ev.data);
+      applyUpdate(id, payload);
+      if (selectedId === id) renderLog();
+      renderQueue();
+    });
+    es.addEventListener('escalated', (ev) => {
+      const c = cases[id];
+      if (c) c.status = 'escalated';
+      if (selectedId === id) renderLog();
+      renderQueue();
+    });
+    es.addEventListener('snapshot', (ev) => {
+      cases[id] = JSON.parse(ev.data);
+      if (selectedId === id) renderLog();
+      renderQueue();
+    });
+    es.addEventListener('done', (ev) => {
+      streaming.delete(id);
+      es.close();
+      api(`/api/cases/${id}`).then(full => {
+        cases[id] = full;
+        if (selectedId === id) renderLog();
+        renderQueue();
+      }).catch(() => {});
+    });
+    es.addEventListener('error', () => {
+      streaming.delete(id);
+      es.close();
+    });
+  }
+
+  function applyUpdate(id, update) {
+    const c = cases[id];
+    if (!c) return;
+    if (update.decision) c.decision = update.decision;
+    if (update.audit_trail) c.audit_trail = (c.audit_trail || []).concat(update.audit_trail);
+    if (c.status === 'queued') c.status = 'running';
+  }
+
+  function fmtTime(t) {
+    if (t == null) return '';
+    return new Date(t * 1000).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function renderLog() {
+    const col = document.getElementById('logCol');
+    const c = cases[selectedId];
+    if (!c) {
+      col.innerHTML = '<div class="panel empty-state">Select a case to see exactly what each agent did, in order.</div>';
+      return;
+    }
+    const t = c.transaction;
+    // Parallel agents can land in audit_trail out of true finish-time order
+    // (LangGraph merges same-superstep updates by node registration, not
+    // completion time) -- sort by timestamp so the log reads chronologically.
+    const entries = [...(c.audit_trail || [])].sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+
+    const rows = entries.map((e, i) => {
+      const delta = i > 0 && entries[i - 1].time != null && e.time != null
+        ? `+${(e.time - entries[i - 1].time).toFixed(2)}s`
+        : '';
+      return `
+        <div class="log-row">
+          <span class="log-time">${fmtTime(e.time)}</span>
+          <span class="log-node">${NODE_LABELS[e.node] || e.node}</span>
+          <span class="log-detail">${e.detail}</span>
+          <span class="log-delta">${delta}</span>
+        </div>`;
+    }).join('');
+
+    const pendingRow = (c.status === 'escalated' && !c.decision)
+      ? `<div class="log-row pending"><span class="log-time">…</span><span class="log-node">Analyst Decision</span><span class="log-detail">Awaiting analyst decision (Approve / Decline) on the dashboard.</span><span class="log-delta"></span></div>`
+      : '';
+
+    col.innerHTML = `
+      <section class="panel log-head">
+        <div class="log-title-row">
+          <span class="log-merchant">${t.merchant || t.id}</span>
+          <span class="chip st-${c.status}">${statusLabel(c.status)}</span>
+        </div>
+        <div class="log-id">${t.id}</div>
+        <div class="log-summary">
+          <div class="summary-item"><span class="label">Amount</span><span class="value mono">${fmtMoney(t.amount, t.currency)}</span></div>
+          <div class="summary-item"><span class="label">Route</span><span class="value">${(c.route || []).join(', ') || '—'}</span></div>
+          <div class="summary-item"><span class="label">Composite score</span><span class="value mono">${c.risk_score != null ? c.risk_score + '/100' : '—'}</span></div>
+          <div class="summary-item"><span class="label">Decision</span><span class="value">${c.decision || '—'}</span></div>
+        </div>
+      </section>
+
+      <section class="panel log-card">
+        <div class="panel-head"><h2>Step-by-step log</h2></div>
+        <div class="log-list">
+          ${entries.length ? rows + pendingRow : '<div class="log-empty">No log entries yet.</div>'}
+        </div>
+      </section>
+    `;
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

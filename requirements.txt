@@ -1,0 +1,8 @@
+langgraph>=0.2.60
+langchain>=0.3.7
+langchain-together>=0.3.0
+python-dotenv>=1.0.1
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+sse-starlette>=2.1.0
+gradio>=5.0.0

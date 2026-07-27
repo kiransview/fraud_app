@@ -1,0 +1,80 @@
+/* Shared design tokens + primitives for every Sentinel UI page.
+   Page-specific layout (queue, pipeline, forms, chat, ...) stays in each
+   page's own <style> block; only truly common pieces live here. */
+:root{
+  --ink:#F5F6F8;
+  --surface:#FFFFFF;
+  --surface-raised:#F1F2F5;
+  --surface-hover:#E8E9ED;
+  --line:#E1E3E8;
+  --line-soft:#ECEDF0;
+  --text:#16181D;
+  --text-2:#4B505C;
+  --text-3:#868C99;
+  --signal:#2563EB;
+  --signal-bg:rgba(37,99,235,0.08);
+  --good:#16A34A;      --good-bg:rgba(22,163,74,0.10);
+  --warning:#B45309;   --warning-bg:rgba(217,119,6,0.12);
+  --serious:#C2410C;   --serious-bg:rgba(194,65,12,0.10);
+  --critical:#DC2626;  --critical-bg:rgba(220,38,38,0.10);
+  --font-display:"Segoe UI Semibold","Segoe UI",system-ui,-apple-system,sans-serif;
+  --font-body:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"Cascadia Code","Cascadia Mono",ui-monospace,"SF Mono",Consolas,monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--ink);color:var(--text);font-family:var(--font-body);
+  font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--signal-bg);color:var(--text);}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px;border-radius:4px;}
+button,textarea,input,select{font-family:inherit;}
+.tnum{font-variant-numeric:tabular-nums;}
+
+.app{max-width:1440px;margin:0 auto;padding:18px 22px 40px;}
+
+.topbar{
+  display:flex;align-items:center;gap:24px;padding:14px 20px;margin-bottom:16px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;flex-wrap:wrap;
+}
+.brand{display:flex;flex-direction:column;gap:2px;padding-right:22px;border-right:1px solid var(--line);}
+.brand .mark{display:flex;align-items:center;gap:9px;}
+.brand .wordmark{font-family:var(--font-display);font-weight:700;font-size:19px;letter-spacing:0.03em;color:var(--text);}
+.brand .tagline{font-size:11.5px;color:var(--text-3);letter-spacing:0.02em;margin-left:29px;}
+
+.page-nav{display:flex;gap:4px;padding:0 8px;}
+.page-nav a{
+  font-size:12.5px;font-weight:600;color:var(--text-3);text-decoration:none;
+  padding:8px 14px;border-radius:9px;
+}
+.page-nav a:hover{color:var(--text);background:var(--surface-hover);}
+.page-nav a.active{color:var(--signal);background:var(--signal-bg);}
+
+.live-status{display:flex;flex-direction:column;gap:6px;align-items:flex-end;padding-left:18px;border-left:1px solid var(--line);}
+.live-dot-row{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);}
+.live-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--text-3);}
+.live-dot.on{background:var(--good);animation:pulse 2s ease-in-out infinite;}
+.live-dot.off{background:var(--critical);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;}
+.panel-head h2{font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);margin:0;}
+.count-chip{font-family:var(--font-mono);font-size:11px;color:var(--text-3);background:var(--surface-raised);padding:2px 8px;border-radius:20px;}
+
+.btn{font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:9px;border:1px solid var(--line);
+  background:var(--surface-raised);color:var(--text-2);cursor:pointer;}
+.btn:hover{background:var(--surface-hover);color:var(--text);}
+.btn:disabled{opacity:0.4;cursor:default;}
+.btn.primary{background:var(--signal-bg);color:var(--signal);border-color:transparent;}
+.btn.primary:hover:not(:disabled){background:var(--signal);color:var(--ink);}
+
+.chip{font-size:10px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;padding:2px 7px;border-radius:20px;white-space:nowrap;}
+.chip.st-approve{color:var(--good);background:var(--good-bg);}
+.chip.st-decline{color:var(--critical);background:var(--critical-bg);}
+.chip.st-escalated{color:var(--warning);background:var(--warning-bg);}
+.chip.st-running{color:var(--signal);background:var(--signal-bg);}
+.chip.st-queued{color:var(--text-3);background:var(--surface-raised);}
+.chip.st-error{color:var(--critical);background:var(--critical-bg);}
+.chip.st-interrupted{color:var(--serious);background:var(--serious-bg);}

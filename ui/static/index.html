@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel — Fraud Operations Console</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .live-status{margin-left:auto;}
+  .workspace{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start;}
+  .left-col{display:flex;flex-direction:column;gap:16px;}
+
+  /* ---- submit panel ---- */
+  .submit-card{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;}
+  .sample-btn{
+    text-align:left;font-size:12.5px;color:var(--text-2);background:var(--surface-raised);
+    border:1px solid var(--line);border-radius:9px;padding:9px 11px;cursor:pointer;
+  }
+  .sample-btn:hover{background:var(--surface-hover);color:var(--text);border-color:var(--signal);}
+  .sample-btn .sb-title{font-weight:600;color:var(--text);display:block;}
+  .sample-btn .sb-meta{font-family:var(--font-mono);font-size:11px;color:var(--text-3);}
+  details.custom{margin-top:4px;}
+  details.custom summary{font-size:11.5px;color:var(--text-3);cursor:pointer;padding:4px 0;}
+  details.custom textarea{
+    width:100%;min-height:140px;background:var(--ink);color:var(--text-2);border:1px solid var(--line);
+    border-radius:8px;font-family:var(--font-mono);font-size:11.5px;padding:8px;margin-top:6px;resize:vertical;
+  }
+  .run-custom-btn{margin-top:6px;font-size:12px;font-weight:600;color:var(--signal);background:var(--signal-bg);
+    border:1px solid transparent;border-radius:8px;padding:7px 12px;cursor:pointer;}
+  .run-custom-btn:hover{background:var(--signal);color:var(--ink);}
+  .submit-error{font-size:11.5px;color:var(--critical);}
+
+  /* ---- queue ---- */
+  .queue-list{display:flex;flex-direction:column;padding:2px 8px 10px;max-height:calc(100vh - 430px);min-height:120px;overflow-y:auto;}
+  .queue-empty{padding:20px 12px;font-size:12.5px;color:var(--text-3);}
+  .queue-item{
+    display:flex;align-items:stretch;gap:10px;padding:11px 10px 11px 12px;margin:2px 0;border-radius:10px;
+    cursor:pointer;border:1px solid transparent;background:none;text-align:left;width:100%;position:relative;
+  }
+  .queue-item:hover{background:var(--surface-hover);}
+  .queue-item.active{background:var(--surface-raised);border-color:var(--line);}
+  .queue-item.active::before{content:'';position:absolute;left:-1px;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--signal);}
+  .stripe{width:4px;border-radius:3px;flex:none;}
+  .stripe.band-good{background:var(--good);}
+  .stripe.band-warning{background:var(--warning);}
+  .stripe.band-serious{background:var(--serious);}
+  .stripe.band-critical{background:var(--critical);}
+  .stripe.band-pending{background:var(--line);}
+  .qi-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;}
+  .qi-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline;}
+  .qi-id{font-family:var(--font-mono);font-size:11px;color:var(--text-3);}
+  .qi-merchant{font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .qi-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .qi-amount{font-family:var(--font-mono);font-size:13px;color:var(--text-2);}
+
+  /* ---- case column ---- */
+  .case-col{display:flex;flex-direction:column;gap:16px;}
+  .empty-state{padding:60px 20px;text-align:center;color:var(--text-3);font-size:13.5px;}
+  .case-head{padding:18px 20px;}
+  .case-head-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+  .case-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .case-merchant{font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--text);text-wrap:balance;}
+  .case-id{font-family:var(--font-mono);font-size:12px;color:var(--text-3);}
+  .case-meta{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;}
+  .meta-item{display:flex;flex-direction:column;gap:2px;}
+  .meta-item .meta-label{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-3);}
+  .meta-item .meta-value{font-size:13px;color:var(--text-2);}
+  .meta-item .meta-value.mono{font-family:var(--font-mono);}
+  .case-amount{font-family:var(--font-mono);font-size:26px;font-weight:600;color:var(--text);}
+  .case-actions{display:flex;gap:8px;flex:none;align-items:center;}
+  .btn.approve:hover:not(:disabled){color:var(--good);border-color:var(--good);}
+  .btn.decline:hover:not(:disabled){color:var(--critical);border-color:var(--critical);}
+  .action-note{font-size:12px;color:var(--text-3);}
+
+  .case-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start;}
+
+  .pipeline-card{padding:18px 20px 22px;}
+  .pf{display:flex;flex-direction:column;align-items:center;}
+  .pf-node{width:100%;max-width:230px;background:var(--surface-raised);border:1px solid var(--line);border-radius:10px;
+    padding:9px 12px;display:flex;flex-direction:column;gap:3px;position:relative;z-index:1;}
+  .pf-node.solo{max-width:260px;}
+  .pf-node-top{display:flex;align-items:center;gap:8px;}
+  .pf-node-label{font-size:12.5px;font-weight:600;color:var(--text);flex:1;}
+  .status-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--text-3);}
+  .status-dot.done{background:var(--good);}
+  .status-dot.review{background:var(--warning);animation:pulse 1.4s ease-in-out infinite;}
+  .status-dot.running{background:var(--signal);animation:pulse 1s ease-in-out infinite;}
+  .status-dot.skip{background:transparent;border:1.5px dashed var(--text-3);}
+  .status-dot.na{background:transparent;border:1.5px dashed var(--warning);}
+  .pf-node-note{font-size:11px;color:var(--text-3);padding-left:0;line-height:1.35;min-height:14px;}
+  .pf-node.skip{opacity:0.55;}
+  .pf-node.na{border-color:var(--warning);}
+  .pf-node.review{border-color:var(--warning);}
+  .pf-stem{width:2px;height:20px;background:var(--line);}
+  .pf-parallel-wrap{position:relative;width:100%;max-width:400px;margin:0 auto;padding-top:20px;}
+  .pf-parallel-wrap::before{content:'';position:absolute;top:0;left:11%;right:11%;height:2px;background:var(--line);}
+  .pf-parallel{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;width:100%;}
+  .pf-parallel .pf-node{position:relative;max-width:none;}
+  .pf-parallel .pf-node::before{content:'';position:absolute;top:-20px;left:50%;width:2px;height:20px;background:var(--line);}
+
+  .factors-card{padding:18px 20px 20px;}
+  .factor-row{display:grid;grid-template-columns:1fr 64px;gap:12px;align-items:start;padding:9px 0;border-bottom:1px solid var(--line-soft);}
+  .factor-row:last-child{border-bottom:none;}
+  .factor-label{display:flex;flex-direction:column;gap:6px;}
+  .factor-name{font-size:12.5px;color:var(--text-2);}
+  .factor-track{height:6px;border-radius:4px;background:var(--surface-raised);overflow:hidden;}
+  .factor-fill{height:100%;border-radius:4px;}
+  .factor-fill.band-good{background:var(--good);}
+  .factor-fill.band-warning{background:var(--warning);}
+  .factor-fill.band-serious{background:var(--serious);}
+  .factor-fill.band-critical{background:var(--critical);}
+  .factor-fill.band-na{background:var(--line);}
+  .factor-score{font-family:var(--font-mono);font-size:13px;text-align:right;color:var(--text-2);padding-top:2px;}
+  .placeholder{font-size:12.5px;color:var(--text-3);padding:6px 0;}
+
+  .sources{margin-top:2px;}
+  .sources summary{font-size:11px;color:var(--text-3);cursor:pointer;list-style:none;}
+  .sources summary::-webkit-details-marker{display:none;}
+  .sources summary::before{content:'\25b8\a0';}
+  .sources[open] summary::before{content:'\25be\a0';}
+  .citation{font-size:11.5px;color:var(--text-3);padding:6px 0 2px 12px;border-left:2px solid var(--line);margin-top:6px;line-height:1.4;}
+  .citation-label{font-weight:600;color:var(--text-2);}
+  .citation-source{display:block;font-style:italic;margin:2px 0;}
+  .citation-path{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);}
+  .citation-path a{color:var(--signal);text-decoration:none;}
+  .citation-path a:hover{text-decoration:underline;}
+
+  .risk-score-line{display:flex;align-items:baseline;gap:6px;font-size:13px;color:var(--text-2);}
+  .risk-score-line .score{font-family:var(--font-mono);font-size:15px;font-weight:600;color:var(--text);}
+  .risk-score-line .band-good{color:var(--good);}
+  .risk-score-line .band-warning{color:var(--warning);}
+  .risk-score-line .band-serious{color:var(--serious);}
+  .risk-score-line .band-critical{color:var(--critical);}
+
+  .narrative-card{padding:18px 20px 20px;}
+  .narrative-body{font-size:13.5px;color:var(--text-2);line-height:1.6;}
+
+  @media (max-width: 980px){
+    .workspace{grid-template-columns:1fr;}
+    .case-grid{grid-template-columns:1fr;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .live-dot.on, .status-dot.running, .status-dot.review{animation:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5.5V11c0 5.6 3.4 9.9 8 11 4.6-1.1 8-5.4 8-11V5.5L12 2z" stroke="#2563EB" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12.2l2.4 2.4 4.6-4.9" stroke="#2563EB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="wordmark">SENTINEL</span>
+      </div>
+      <span class="tagline">Payment fraud command center</span>
+    </div>
+    <nav class="page-nav">
+      <a href="index.html" class="active">Dashboard</a>
+      <a href="submit.html">New case (guided form)</a>
+      <a href="logs.html">Agent log</a>
+    </nav>
+    <div class="live-status">
+      <div class="live-dot-row"><span class="live-dot" id="liveDot"></span><span id="liveText">Connecting…</span></div>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-3);">openai/gpt-oss-120b via Together AI</div>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <div class="left-col">
+      <section class="panel submit-card">
+        <div class="panel-head" style="padding:0 0 4px;"><h2>New case</h2></div>
+        <div id="sampleButtons"></div>
+        <details class="custom">
+          <summary>Custom transaction (JSON)</summary>
+          <textarea id="customJson"></textarea>
+          <button class="run-custom-btn" id="runCustomBtn">Run custom case</button>
+        </details>
+        <div class="submit-error" id="submitError"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Case queue</h2>
+          <span class="count-chip" id="queueCount">0</span>
+        </div>
+        <div class="queue-list" id="queueList"><div class="queue-empty">No cases yet — submit one above.</div></div>
+      </section>
+    </div>
+
+    <section class="case-col" id="caseCol">
+      <div class="panel empty-state">Select or submit a case to see the agent pipeline run live.</div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  const API = "";
+  const BANDS = [
+    {max:24, key:'good', label:'Low'},
+    {max:49, key:'warning', label:'Watch'},
+    {max:74, key:'serious', label:'Elevated'},
+    {max:101, key:'critical', label:'Critical'},
+  ];
+  const bandFor = (score) => BANDS.find(b => score <= b.max);
+
+  const NODE_META = {
+    supervisor: 'Supervisor',
+    risk_analysis: 'Risk Analysis',
+    compliance: 'Compliance',
+    aggregator: 'Risk Aggregator',
+    decision: 'Decision Router',
+    narrative: 'Narrative Agent',
+  };
+  const PARALLEL = ['risk_analysis', 'compliance'];
+
+  let SAMPLES = [];
+  let cases = {};           // id -> case object mirroring the server registry
+  let selectedId = null;
+  const streaming = new Set(); // ids with an open EventSource
+
+  async function api(path, opts) {
+    const res = await fetch(API + path, opts);
+    if (!res.ok) throw new Error((await res.text()) || res.statusText);
+    return res.json();
+  }
+
+  // ---------------------------------------------------------------- boot --
+  async function boot() {
+    try {
+      SAMPLES = await api('/api/samples');
+      renderSampleButtons();
+      setLive(true);
+    } catch (e) {
+      setLive(false);
+      return;
+    }
+    try {
+      const list = await api('/api/cases');
+      list.forEach(c => { cases[c.id] = c; });
+    } catch (e) { /* fresh server, no cases yet */ }
+    renderQueue();
+
+    // Deep link from the intake form (submit.html?... redirects here as
+    // index.html?case=ID) -- select it and attach to its live stream.
+    const deepLinkId = new URLSearchParams(location.search).get('case');
+    if (deepLinkId && cases[deepLinkId]) {
+      selectedId = deepLinkId;
+      renderQueue();
+      renderCase();
+      if (['queued', 'running'].includes(cases[deepLinkId].status)) startStream(deepLinkId);
+    }
+  }
+
+  function setLive(ok) {
+    document.getElementById('liveDot').className = 'live-dot ' + (ok ? 'on' : 'off');
+    document.getElementById('liveText').textContent = ok ? 'Connected to Sentinel API' : 'API unreachable';
+  }
+
+  // ---------------------------------------------------------- submit UI --
+  function renderSampleButtons() {
+    const el = document.getElementById('sampleButtons');
+    el.innerHTML = SAMPLES.map((s, i) => `
+      <button class="sample-btn" data-idx="${i}">
+        <span class="sb-title">${s.transaction.merchant}</span>
+        <span class="sb-meta">${s.transaction.id} · ${fmtMoney(s.transaction.amount, s.transaction.currency)} · ${s.transaction.channel}</span>
+      </button>
+    `).join('');
+    el.querySelectorAll('.sample-btn').forEach(btn => {
+      btn.addEventListener('click', () => submitCase(SAMPLES[+btn.dataset.idx]));
+    });
+
+    const textarea = document.getElementById('customJson');
+    textarea.value = JSON.stringify(SAMPLES[0] || { transaction: {}, customer_profile: {} }, null, 2);
+    document.getElementById('runCustomBtn').addEventListener('click', () => {
+      const errEl = document.getElementById('submitError');
+      errEl.textContent = '';
+      let payload;
+      try {
+        payload = JSON.parse(textarea.value);
+      } catch (e) {
+        errEl.textContent = 'Invalid JSON: ' + e.message;
+        return;
+      }
+      submitCase(payload).catch(e => { errEl.textContent = e.message; });
+    });
+  }
+
+  async function submitCase(sample) {
+    const errEl = document.getElementById('submitError');
+    errEl.textContent = '';
+
+    // Sample transactions have fixed IDs -- re-clicking a sample that's
+    // already been run would 409. Reopen the existing case instead.
+    const existingId = sample.transaction && sample.transaction.id;
+    if (existingId && cases[existingId]) {
+      selectedId = existingId;
+      renderQueue();
+      renderCase();
+      if (cases[existingId].status === 'queued' || cases[existingId].status === 'running') startStream(existingId);
+      return;
+    }
+
+    try {
+      const { id } = await api('/api/cases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction: sample.transaction, customer_profile: sample.customer_profile }),
+      });
+      cases[id] = {
+        id, transaction: sample.transaction, customer_profile: sample.customer_profile,
+        status: 'queued', route: [], findings: {}, risk_score: null, risk_factors: [],
+        decision: null, narrative: null, audit_trail: [], created_at: Date.now() / 1000,
+      };
+      selectedId = id;
+      renderQueue();
+      renderCase();
+      startStream(id);
+    } catch (e) {
+      errEl.textContent = 'Could not submit case: ' + e.message;
+    }
+  }
+
+  // -------------------------------------------------------------- stream --
+  function startStream(id) {
+    if (streaming.has(id)) return;
+    streaming.add(id);
+    const es = new EventSource(`${API}/api/cases/${id}/stream`);
+
+    es.addEventListener('update', (ev) => {
+      const { node, payload } = JSON.parse(ev.data);
+      applyUpdate(id, payload);
+      if (selectedId === id) renderCase();
+      renderQueue();
+    });
+
+    es.addEventListener('escalated', (ev) => {
+      const payload = JSON.parse(ev.data);
+      const c = cases[id];
+      if (c) {
+        c.status = 'escalated';
+        c.risk_score = payload.risk_score ?? c.risk_score;
+        c.risk_factors = payload.risk_factors ?? c.risk_factors;
+      }
+      if (selectedId === id) renderCase();
+      renderQueue();
+    });
+
+    es.addEventListener('snapshot', (ev) => {
+      const snap = JSON.parse(ev.data);
+      cases[id] = snap;
+      if (selectedId === id) renderCase();
+      renderQueue();
+    });
+
+    es.addEventListener('done', (ev) => {
+      streaming.delete(id);
+      es.close();
+      // Safety-net refetch for canonical final state.
+      api(`/api/cases/${id}`).then(full => {
+        cases[id] = full;
+        if (selectedId === id) renderCase();
+        renderQueue();
+      }).catch(() => {});
+    });
+
+    es.addEventListener('error', () => {
+      streaming.delete(id);
+      es.close();
+      const c = cases[id];
+      if (c && c.status !== 'error') { c.status = 'error'; }
+      if (selectedId === id) renderCase();
+      renderQueue();
+    });
+  }
+
+  function applyUpdate(id, update) {
+    const c = cases[id];
+    if (!c) return;
+    if (update.findings) Object.assign(c.findings, update.findings);
+    if (update.route) c.route = update.route;
+    if (update.risk_score !== undefined) c.risk_score = update.risk_score;
+    if (update.risk_factors) c.risk_factors = update.risk_factors;
+    if (update.decision) c.decision = update.decision;
+    if (update.narrative) c.narrative = update.narrative;
+    if (update.audit_trail) c.audit_trail = (c.audit_trail || []).concat(update.audit_trail);
+    if (c.status === 'queued') c.status = 'running';
+  }
+
+  async function resumeCase(id, decision) {
+    try {
+      const full = await api(`/api/cases/${id}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      });
+      cases[id] = full;
+      renderCase();
+      renderQueue();
+    } catch (e) {
+      alert('Resume failed: ' + e.message);
+    }
+  }
+
+  // -------------------------------------------------------------- queue --
+  function fmtMoney(n, ccy) {
+    n = Number(n || 0);
+    return (ccy === 'USD' ? '$' : '') + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function statusLabel(status) {
+    return { queued: 'Queued', running: 'Running', escalated: 'Escalated', approve: 'Approved', decline: 'Declined', error: 'Error', interrupted: 'Interrupted' }[status] || status;
+  }
+
+  const SERVABLE_REFERENCE_FILES = ['compliance_policy.md', 'amount_baseline.json'];
+  function referenceLink(path) {
+    const filename = path.split('/').pop();
+    if (SERVABLE_REFERENCE_FILES.includes(filename)) {
+      return `<a href="/api/reference/${filename}" target="_blank" rel="noopener">${path}</a>`;
+    }
+    return path;
+  }
+
+  function bandKeyForCase(c) {
+    if (c.risk_score == null) return 'pending';
+    return bandFor(c.risk_score).key;
+  }
+
+  function renderQueue() {
+    const list = Object.values(cases).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    document.getElementById('queueCount').textContent = list.length;
+    const el = document.getElementById('queueList');
+    if (!list.length) {
+      el.innerHTML = '<div class="queue-empty">No cases yet — submit one above.</div>';
+      return;
+    }
+    el.innerHTML = list.map(c => `
+      <button class="queue-item ${c.id === selectedId ? 'active' : ''}" data-id="${c.id}">
+        <span class="stripe band-${bandKeyForCase(c)}"></span>
+        <span class="qi-body">
+          <span class="qi-top"><span class="qi-id">${c.id}</span></span>
+          <span class="qi-merchant">${c.transaction.merchant || c.transaction.id}</span>
+          <span class="qi-meta">
+            <span class="qi-amount tnum">${fmtMoney(c.transaction.amount, c.transaction.currency)}</span>
+            <span class="chip st-${c.status}">${statusLabel(c.status)}</span>
+          </span>
+        </span>
+      </button>
+    `).join('');
+    el.querySelectorAll('.queue-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedId = btn.dataset.id;
+        renderQueue();
+        renderCase();
+        if (cases[selectedId].status === 'queued' || cases[selectedId].status === 'running') startStream(selectedId);
+      });
+    });
+  }
+
+  // ---------------------------------------------------------- case view --
+  function deriveNodeStates(c) {
+    const s = {};
+    const started = (c.route || []).length > 0 || c.status !== 'queued';
+    s.supervisor = (c.route || []).length > 0
+      ? { status: 'done', note: `Routed to: ${c.route.join(', ')}` }
+      : { status: started ? 'running' : 'pending', note: '' };
+
+    PARALLEL.forEach(key => {
+      if (!(c.route || []).length) { s[key] = { status: 'pending', note: '' }; return; }
+      if (!c.route.includes(key)) { s[key] = { status: 'skip', note: 'Not required — fast-path' }; return; }
+      const f = c.findings[key];
+      if (!f) { s[key] = { status: 'running', note: 'Analyzing…' }; return; }
+      if (f.score === null || f.score === undefined) { s[key] = { status: 'na', note: f.reason }; return; }
+      s[key] = { status: 'done', note: f.reason };
+    });
+
+    const allIn = (c.route || []).length > 0 && c.route.every(k => c.findings[k]);
+    s.aggregator = c.risk_score != null
+      ? { status: 'done', note: `Composite ${c.risk_score}/100` }
+      : { status: allIn ? 'running' : 'pending', note: allIn ? 'Aggregating findings…' : '' };
+
+    if (c.status === 'escalated' && !c.decision) {
+      s.decision = { status: 'review', note: 'Escalated — awaiting analyst decision' };
+    } else if (c.decision) {
+      const label = c.decision === 'approve' ? 'Approved.' : c.decision === 'decline' ? 'Declined.' : `Decision: ${c.decision}`;
+      s.decision = { status: 'done', note: label };
+    } else {
+      s.decision = { status: c.risk_score != null ? 'running' : 'pending', note: c.risk_score != null ? 'Routing…' : '' };
+    }
+
+    if (c.narrative) {
+      s.narrative = { status: 'done', note: 'Case note generated.' };
+    } else if (c.status === 'approve') {
+      s.narrative = { status: 'skip', note: 'Not required for auto-approved cases.' };
+    } else if (c.decision === 'decline' || c.status === 'escalated' && c.decision) {
+      s.narrative = { status: 'running', note: 'Writing case note…' };
+    } else {
+      s.narrative = { status: 'pending', note: '' };
+    }
+    return s;
+  }
+
+  function pfNode(key, st, extraClass) {
+    st = st || { status: 'pending', note: '' };
+    return `
+      <div class="pf-node ${st.status} ${extraClass || ''}">
+        <div class="pf-node-top">
+          <span class="pf-node-label">${NODE_META[key]}</span>
+          <span class="status-dot ${st.status}"></span>
+        </div>
+        <span class="pf-node-note">${st.note || ''}</span>
+      </div>`;
+  }
+
+  function riskScoreLine(score) {
+    if (score == null) return `<span class="risk-score-line">Risk score: <span class="score">awaiting…</span></span>`;
+    const band = bandFor(score);
+    return `<span class="risk-score-line">Risk score: <span class="score band-${band.key}">${score}/100 (${band.label})</span></span>`;
+  }
+
+  function renderCase() {
+    const col = document.getElementById('caseCol');
+    const c = cases[selectedId];
+    if (!c) {
+      col.innerHTML = '<div class="panel empty-state">Select or submit a case to see the agent pipeline run live.</div>';
+      return;
+    }
+    const states = deriveNodeStates(c);
+    const t = c.transaction, p = c.customer_profile || {};
+    const factorSource = (c.risk_factors && c.risk_factors.length)
+      ? c.risk_factors
+      : Object.entries(c.findings).map(([agent, f]) => ({ agent, score: f.score, reason: f.reason, citations: f.citations || [] }));
+    const sortedFactors = [...factorSource].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+
+    const canResume = c.status === 'escalated' && !c.decision;
+
+    col.innerHTML = `
+      <section class="panel case-head">
+        <div class="case-head-top">
+          <div>
+            <div class="case-title-row">
+              <span class="case-merchant">${t.merchant || t.id}</span>
+              <span class="chip st-${c.status}">${statusLabel(c.status)}</span>
+            </div>
+            <span class="case-id">${t.id} · ${t.category || ''}</span>
+            <div class="case-meta">
+              <div class="meta-item"><span class="meta-label">Channel</span><span class="meta-value">${t.channel || '—'}</span></div>
+              <div class="meta-item"><span class="meta-label">Origin</span><span class="meta-value">${t.geo || '—'}${t.home_geo ? ' (home: ' + t.home_geo + ')' : ''}</span></div>
+              <div class="meta-item"><span class="meta-label">Device</span><span class="meta-value">${t.device_new ? 'New / unrecognized' : 'Known device'}</span></div>
+              <div class="meta-item"><span class="meta-label">Account</span><span class="meta-value mono">${p.account_id || '—'}</span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+            <span class="case-amount tnum">${fmtMoney(t.amount, t.currency)}</span>
+            ${riskScoreLine(c.risk_score)}
+            <div class="case-actions">
+              ${canResume ? `
+                <button class="btn approve" data-act="approve">Approve</button>
+                <button class="btn decline" data-act="decline">Decline</button>
+              ` : `<span class="action-note">${c.decision ? 'Case closed.' : 'Pipeline in progress…'}</span>`}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="case-grid">
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <section class="panel pipeline-card">
+            <div class="panel-head"><h2>Agent pipeline (live)</h2></div>
+            <div class="pf">
+              ${pfNode('supervisor', states.supervisor, 'solo')}
+              <div class="pf-stem"></div>
+              <div class="pf-parallel-wrap"><div class="pf-parallel">
+                ${PARALLEL.map(k => pfNode(k, states[k])).join('')}
+              </div></div>
+              <div class="pf-stem"></div>
+              ${pfNode('aggregator', states.aggregator, 'solo')}
+              <div class="pf-stem"></div>
+              ${pfNode('decision', states.decision, 'solo')}
+              <div class="pf-stem"></div>
+              ${pfNode('narrative', states.narrative, 'solo')}
+            </div>
+          </section>
+
+          <section class="panel factors-card">
+            <div class="panel-head"><h2>Risk factors</h2></div>
+            ${sortedFactors.length ? sortedFactors.map(f => {
+              const b = f.score == null ? 'na' : bandFor(f.score).key;
+              const citations = f.citations || [];
+              return `
+              <div class="factor-row">
+                <div class="factor-label">
+                  <span class="factor-name">${NODE_META[f.agent] || f.agent}: ${f.reason || ''}</span>
+                  <div class="factor-track"><div class="factor-fill band-${b}" style="width:${f.score ?? 0}%"></div></div>
+                  ${citations.length ? `
+                    <details class="sources">
+                      <summary>Sources (${citations.length})</summary>
+                      ${citations.map(c => `
+                        <div class="citation">
+                          <span class="citation-label">${c.label}</span>
+                          <span class="citation-source">${c.source}</span>
+                          <span>${c.excerpt}</span>
+                          ${c.path ? `<span class="citation-path">${referenceLink(c.path)}</span>` : ''}
+                        </div>
+                      `).join('')}
+                    </details>
+                  ` : ''}
+                </div>
+                <span class="factor-score tnum">${f.score ?? '—'}</span>
+              </div>`;
+            }).join('') : '<div class="placeholder">Awaiting subagent findings…</div>'}
+          </section>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <section class="panel narrative-card">
+            <div class="panel-head"><h2>Analyst narrative</h2></div>
+            <p class="narrative-body">${c.narrative || '<span class="placeholder">Not yet generated.</span>'}</p>
+          </section>
+        </div>
+      </div>
+    `;
+
+    if (canResume) {
+      col.querySelectorAll('.case-actions .btn').forEach(btn => {
+        btn.addEventListener('click', () => resumeCase(c.id, btn.dataset.act));
+      });
+    }
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
