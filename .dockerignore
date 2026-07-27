@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.git/
+.claude/
+data/case_registry.json

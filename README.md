@@ -3,9 +3,8 @@ title: Sentinel Fraud Review
 emoji: 🛡️
 colorFrom: blue
 colorTo: gray
-sdk: gradio
-sdk_version: 6.20.0
-app_file: app.py
+sdk: docker
+app_port: 7860
 pinned: false
 ---
 
@@ -208,6 +207,30 @@ redirect from `treasury.gov/ofac/downloads/sdn.csv`). To refresh
 `amount_baseline.json`, recompute percentiles and fraud-rate-by-bucket
 (plain `csv`/`statistics`, no pandas needed) over any CSV with `Amount`/
 `Class` columns, such as the ULB dataset above.
+
+## Deploying to HuggingFace Spaces
+
+This repo's YAML header (top of this file) declares `sdk: docker`, so a
+Space built from it runs the *actual* app -- the Dockerfile builds this
+image and starts `uvicorn ui.server:app`, the same FastAPI service `run.py`
+launches locally. No rebuild, no separate demo app: what you see locally is
+what the Space serves, live SSE streaming included.
+
+```
+hf auth login
+hf repo create <your-username>/<space-name> --type space --sdk docker
+git remote add space https://huggingface.co/spaces/<your-username>/<space-name>
+git push space main
+```
+
+Then, on the Space's page: **Settings -> Variables and secrets -> New
+secret**, add `TOGETHER_API_KEY`. Never commit it or paste it into a
+terminal command that lands in shell history someone else can see.
+
+Note: HF's free CPU tier Spaces have ephemeral storage -- `data/case_registry.json`
+(see "What's real vs. simulated" above and `ui/server.py`) may not survive a
+Space restart/rebuild there. That's a real limitation for a demo Space, same
+as the `MemorySaver` checkpointer limitation below.
 
 ## Next steps
 
