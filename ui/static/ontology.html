@@ -23,12 +23,6 @@
     padding:14px 16px;overflow-x:auto;margin:0 0 16px;
   }
   .doc-body pre code{background:none;padding:0;font-size:12px;line-height:1.6;color:var(--text-2);white-space:pre;}
-  .doc-body pre.md-mermaid{border-color:var(--signal-bg);}
-  .mermaid-tag{
-    display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;
-    text-transform:uppercase;letter-spacing:0.05em;color:var(--signal);background:var(--signal-bg);
-    padding:3px 9px;border-radius:20px;margin-bottom:10px;
-  }
   .doc-table-wrap{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line-soft);border-radius:10px;}
   table.md-table{width:100%;border-collapse:collapse;font-size:13px;}
   table.md-table th{
@@ -38,7 +32,39 @@
   table.md-table td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top;color:var(--text-2);}
   table.md-table tr:last-child td{border-bottom:none;}
   table.md-table td:first-child{color:var(--text);font-weight:600;white-space:nowrap;}
+  .prov-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:2px 6px;border-radius:20px;white-space:nowrap;}
+  .prov-badge.real{color:var(--signal);background:var(--signal-bg);}
+  .prov-badge.simulated{color:var(--text-3);background:var(--surface-raised);}
   .doc-loading,.doc-error{padding:40px 20px;text-align:center;color:var(--text-3);font-size:13px;}
+
+  /* ---- pipeline flow diagram ---- */
+  .flow-wrap{margin:10px 0 22px;border:1px solid var(--line-soft);border-radius:10px;background:var(--surface-raised);padding:12px 8px 4px;}
+  .flow-wrap svg{width:100%;height:auto;display:block;}
+  .flow-legend{display:flex;flex-wrap:wrap;gap:16px;padding:10px 14px 12px;font-size:11px;color:var(--text-3);}
+  .flow-legend-item{display:flex;align-items:center;gap:6px;}
+  .flow-legend-swatch{width:16px;height:0;border-top:2px solid var(--text-3);}
+  .flow-legend-swatch.dashed{border-top-style:dashed;}
+  .flow-legend-dot{width:8px;height:8px;border-radius:50%;flex:none;}
+  .flow-legend-dot.good{background:var(--good);}
+  .flow-legend-dot.warning{background:var(--warning);}
+  .flow-legend-dot.critical{background:var(--critical);}
+
+  /* ---- worked instance ---- */
+  .wi-context{display:flex;flex-direction:column;gap:9px;padding:12px 14px;border:1px solid var(--line-soft);border-radius:10px;background:var(--surface-raised);margin-bottom:16px;}
+  .wi-row{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;}
+  .wi-row-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-3);flex:none;width:76px;}
+  .wi-chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .wi-chip{font-size:11.5px;font-family:var(--font-mono);color:var(--text-2);background:var(--surface);border:1px solid var(--line-soft);padding:2px 8px;border-radius:20px;}
+  .wi-timeline{display:flex;flex-direction:column;margin:0 0 18px;}
+  .wi-step{display:flex;padding:9px 0 9px 18px;border-left:2px solid var(--line-soft);margin-left:5px;position:relative;}
+  .wi-step:last-child{border-left-color:transparent;padding-bottom:0;}
+  .wi-step::before{content:'';position:absolute;left:-6px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--signal);border:2px solid var(--surface);}
+  .wi-step-body{flex:1;}
+  .wi-step-head{font-size:12.5px;}
+  .wi-step-head b{color:var(--text);}
+  .wi-step-action{color:var(--signal);font-family:var(--font-mono);font-size:11.5px;margin-left:4px;}
+  .wi-step-detail{font-size:12px;color:var(--text-3);margin-top:2px;line-height:1.5;}
+  .wi-citations-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-3);margin:0 0 8px;}
 </style>
 </head>
 <body>
@@ -92,11 +118,154 @@
     return `<div class="doc-table-wrap"><table class="md-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
   }
 
+  // Hand-built pipeline-flow diagram (plain inline SVG, no charting
+  // dependency) standing in for docs/ontology.md's ```mermaid block --
+  // this page renders its own known-good visual instead of trying to
+  // interpret arbitrary Mermaid syntax without a rendering library.
+  function renderPipelineFlow(){
+    const N = { // cx, cy, w, h, label, variant
+      case:       [360, 30,  160, 44, 'Case submitted', 'terminal'],
+      supervisor: [360, 100, 150, 44, 'Supervisor', 'default'],
+      risk:       [190, 178, 150, 44, 'Risk Analysis', 'default'],
+      compliance: [530, 178, 150, 44, 'Compliance', 'default'],
+      aggregator: [360, 256, 150, 44, 'Risk Aggregator', 'default'],
+      decision:   [360, 334, 150, 44, 'Decision Router', 'signal'],
+      approve:    [150, 412, 140, 44, 'Approve', 'good'],
+      escalate:   [360, 412, 140, 44, 'Escalate', 'warning'],
+      decline:    [570, 412, 140, 44, 'Decline', 'critical'],
+      human:      [360, 490, 150, 44, 'Human Analyst', 'default'],
+      narrative:  [465, 568, 150, 44, 'Narrative Agent', 'default'],
+      end:        [360, 612, 160, 44, 'End', 'terminal'],
+    };
+    const fill = { default: 'var(--surface)', signal: 'var(--signal-bg)', good: 'var(--good-bg)', warning: 'var(--warning-bg)', critical: 'var(--critical-bg)', terminal: 'var(--surface-raised)' };
+    const stroke = { default: 'var(--line)', signal: 'var(--signal)', good: 'var(--good)', warning: 'var(--warning)', critical: 'var(--critical)', terminal: 'var(--text-3)' };
+    const text = { default: 'var(--text-2)', signal: 'var(--signal)', good: 'var(--good)', warning: 'var(--warning)', critical: 'var(--critical)', terminal: 'var(--text-2)' };
+
+    function node(key){
+      const [cx, cy, w, h, label, variant] = N[key];
+      const isTerminal = variant === 'terminal';
+      const shape = isTerminal
+        ? `<rect x="${cx - w/2}" y="${cy - h/2}" width="${w}" height="${h}" rx="${h/2}" style="fill:${fill[variant]};stroke:${stroke[variant]};stroke-width:1.4;stroke-dasharray:3 3"/>`
+        : `<rect x="${cx - w/2}" y="${cy - h/2}" width="${w}" height="${h}" rx="9" style="fill:${fill[variant]};stroke:${stroke[variant]};stroke-width:1.4"/>`;
+      return `${shape}<text x="${cx}" y="${cy + 4}" text-anchor="middle" style="font:600 12px var(--font-body);fill:${text[variant]}">${label}</text>`;
+    }
+    // top/bottom/side anchor helpers
+    const top = k => [N[k][0], N[k][1] - N[k][3]/2];
+    const bottom = k => [N[k][0], N[k][1] + N[k][3]/2];
+
+    function edge(from, to, opts = {}){
+      const [x1, y1] = bottom(from);
+      const [x2, y2] = top(to);
+      const color = opts.color || 'var(--text-3)';
+      const dash = opts.dashed ? 'stroke-dasharray="5 4"' : '';
+      const marker = opts.marker || 'muted';
+      const label = opts.label
+        ? `<text x="${(x1+x2)/2 + (opts.dx||0)}" y="${(y1+y2)/2 + (opts.dy||-4)}" text-anchor="middle" style="font:600 10px var(--font-body);fill:${color}">${opts.label}</text>`
+        : '';
+      return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${color}" stroke-width="1.6" ${dash} marker-end="url(#arrow-${marker})"/>${label}`;
+    }
+
+    const edges = [
+      edge('case', 'supervisor'),
+      edge('supervisor', 'risk', { label: 'always' }),
+      edge('supervisor', 'compliance', { dashed: true, label: 'full review only', dx: 10 }),
+      edge('risk', 'aggregator'),
+      edge('compliance', 'aggregator', { dashed: true }),
+      edge('aggregator', 'decision'),
+      edge('decision', 'approve', { color: 'var(--good)', marker: 'good', label: 'score ≤ 25', dx: -14 }),
+      edge('decision', 'escalate', { color: 'var(--warning)', marker: 'warning', label: '25–90', dx: 22 }),
+      edge('decision', 'decline', { color: 'var(--critical)', marker: 'critical', label: 'score ≥ 90', dx: 16 }),
+      edge('escalate', 'human', { color: 'var(--warning)', marker: 'warning' }),
+      edge('human', 'narrative'),
+      edge('decline', 'narrative', { color: 'var(--critical)', marker: 'critical' }),
+      edge('narrative', 'end'),
+      edge('approve', 'end', { dashed: true, label: 'narrative skipped', dx: -36, dy: 30 }),
+    ];
+
+    const svg = `
+      <svg viewBox="0 0 720 650" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          ${['muted','good','warning','critical'].map(k => `
+            <marker id="arrow-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" style="fill:${k === 'muted' ? 'var(--text-3)' : 'var(--' + k + ')'}"/>
+            </marker>`).join('')}
+        </defs>
+        ${edges.join('')}
+        ${Object.keys(N).map(node).join('')}
+      </svg>`;
+
+    return `
+      <div class="flow-wrap">
+        ${svg}
+        <div class="flow-legend">
+          <span class="flow-legend-item"><span class="flow-legend-swatch"></span>Required step</span>
+          <span class="flow-legend-item"><span class="flow-legend-swatch dashed"></span>Conditional / skipped</span>
+          <span class="flow-legend-item"><span class="flow-legend-dot good"></span>Auto-approve</span>
+          <span class="flow-legend-item"><span class="flow-legend-dot warning"></span>Escalate to analyst</span>
+          <span class="flow-legend-item"><span class="flow-legend-dot critical"></span>Auto-decline</span>
+        </div>
+      </div>`;
+  }
+
+  // Renders docs/ontology.md's ```instance fence: pipe-delimited
+  // transaction:/customer:/step:/citation: lines describing one worked
+  // case end-to-end, laid out as a context panel + a step timeline + an
+  // evidence table (matching the case-evidence table in index.html).
+  function renderWorkedInstance(code){
+    const rows = { transaction: [], customer: [], step: [], citation: [] };
+    code.split('\n').forEach(line => {
+      const m = line.match(/^(transaction|customer|step|citation):\s*(.*)$/);
+      if (!m) return;
+      rows[m[1]].push(m[2].split('|').map(s => s.trim()));
+    });
+
+    const chipRow = (label, parts) => parts.length ? `
+      <div class="wi-row">
+        <span class="wi-row-label">${label}</span>
+        <div class="wi-chips">${parts[0].map(p => `<span class="wi-chip">${inline(p)}</span>`).join('')}</div>
+      </div>` : '';
+
+    const context = (rows.transaction.length || rows.customer.length) ? `
+      <div class="wi-context">
+        ${chipRow('Transaction', rows.transaction)}
+        ${chipRow('Customer', rows.customer)}
+      </div>` : '';
+
+    const timeline = rows.step.length ? `
+      <div class="wi-timeline">
+        ${rows.step.map(([actor, action, detail]) => `
+          <div class="wi-step">
+            <div class="wi-step-body">
+              <div class="wi-step-head"><b>${inline(actor || '')}</b><span class="wi-step-action">${inline(action || '')}</span></div>
+              ${detail ? `<div class="wi-step-detail">${inline(detail)}</div>` : ''}
+            </div>
+          </div>`).join('')}
+      </div>` : '';
+
+    const citations = rows.citation.length ? `
+      <div class="wi-citations-label">Citations for the two findings above</div>
+      <div class="doc-table-wrap">
+        <table class="md-table">
+          <thead><tr><th>Signal</th><th>Source</th><th>Basis</th></tr></thead>
+          <tbody>
+            ${rows.citation.map(([label, prov, detail]) => `
+              <tr>
+                <td>${inline(label || '')}</td>
+                <td><span class="prov-badge ${prov === 'real' ? 'real' : 'simulated'}">${prov === 'real' ? 'Real' : 'Simulated'}</span></td>
+                <td>${inline(detail || '')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : '';
+
+    return context + timeline + citations;
+  }
+
   // Small, tailored markdown -> HTML renderer covering exactly what
-  // docs/ontology.md uses: headers, fenced code (incl. a mermaid block,
-  // shown as labeled source rather than rendered graphically -- this page
-  // stays dependency-free like the rest of the UI), tables, bullet lists,
-  // bold/inline-code, and paragraphs.
+  // docs/ontology.md uses: headers, fenced code (special-cased for the
+  // ```mermaid pipeline diagram and the ```instance worked example --
+  // see renderPipelineFlow/renderWorkedInstance above), tables, bullet
+  // lists, bold/inline-code, and paragraphs.
   function renderMarkdown(md){
     const lines = md.replace(/\r\n/g, '\n').split('\n');
     let html = '';
@@ -110,8 +279,9 @@
         i++;
         while (i < lines.length && !lines[i].startsWith('```')) { code.push(lines[i]); i++; }
         i++;
-        const tag = lang === 'mermaid' ? '<span class="mermaid-tag">Mermaid diagram source</span><br>' : '';
-        html += `<pre class="${lang === 'mermaid' ? 'md-mermaid' : ''}">${tag}<code>${escapeHtml(code.join('\n'))}</code></pre>`;
+        if (lang === 'mermaid') { html += renderPipelineFlow(); continue; }
+        if (lang === 'instance') { html += renderWorkedInstance(code.join('\n')); continue; }
+        html += `<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`;
         continue;
       }
 

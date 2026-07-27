@@ -16,64 +16,34 @@ field belongs, and see which parts are grounded in real data versus
 simulated (a distinction this ontology treats as first-class, since it's
 been the central design question of this project).
 
-## Class hierarchy
+## Pipeline flow
+
+How a Case actually moves through the agents -- the mechanics behind every
+row in the Classes and Object properties tables below. Auto-approve is the
+only path that skips the Narrative Agent.
 
 ```mermaid
-classDiagram
-    class Case
-    class Transaction
-    class CustomerProfile
-    class Agent
-    class Supervisor
-    class Subagent
-    class RiskAnalysisAgent
-    class ComplianceAgent
-    class Aggregator
-    class DecisionRouter
-    class NarrativeAgent
-    class HumanAnalyst
-    class Finding
-    class RiskFactor
-    class Citation
-    class ReferenceSource
-    class FraudDataset
-    class SanctionsList
-    class CompliancePolicy
-    class PolicySection
-    class Decision
-    class AuditTrailEntry
-    class Tool
-    class EvidenceSignal
-
-    Agent <|-- Supervisor
-    Agent <|-- Subagent
-    Agent <|-- Aggregator
-    Agent <|-- DecisionRouter
-    Agent <|-- NarrativeAgent
-    Subagent <|-- RiskAnalysisAgent
-    Subagent <|-- ComplianceAgent
-    ReferenceSource <|-- FraudDataset
-    ReferenceSource <|-- SanctionsList
-    ReferenceSource <|-- CompliancePolicy
-    CompliancePolicy *-- PolicySection
-
-    Case "1" *-- "1" Transaction
-    Case "1" *-- "1" CustomerProfile
-    Case "1" o-- "0..2" Finding : findings
-    Case "1" *-- "1" Decision
-    Case "1" *-- "*" AuditTrailEntry : audit_trail
-    Subagent "1" ..> "1" Tool : uses
-    Tool "1" ..> "*" EvidenceSignal : returns
-    Subagent "1" --> "1" Finding : produces
-    Finding "1" *-- "*" Citation
-    Citation "*" --> "1" ReferenceSource : references
-    Aggregator "1" ..> "*" Finding : reads
-    Aggregator "1" --> "*" RiskFactor : produces
-    DecisionRouter "1" ..> "1" Case : reads risk_score
-    DecisionRouter "1" --> "1" Decision : sets
-    Decision "0..1" --> "1" HumanAnalyst : escalates to
-    NarrativeAgent "1" ..> "*" RiskFactor : reads
+flowchart TD
+    Case([Case submitted]) --> Supervisor
+    Supervisor -->|always| RiskAnalysis[RiskAnalysisAgent]
+    Supervisor -.->|full review only| Compliance[ComplianceAgent]
+    RiskAnalysis --> Aggregator[Risk Aggregator]
+    Compliance -.-> Aggregator
+    Aggregator --> DecisionRouter{Decision Router}
+    DecisionRouter -->|score <= 25| Approve[[Approve]]
+    DecisionRouter -->|25 < score < 90| Escalate[[Escalate]]
+    DecisionRouter -->|score >= 90| Decline[[Decline]]
+    Escalate --> HumanAnalyst[Human Analyst]
+    HumanAnalyst --> Narrative[Narrative Agent]
+    Decline --> Narrative
+    Narrative --> End([End])
+    Approve -.->|narrative skipped| End
 ```
+
+Class hierarchy and every relationship the diagram implies (inheritance,
+composition, "produces"/"reads"/"references") are spelled out explicitly in
+the two tables immediately below -- this diagram is about *flow*, the tables
+are about *structure*.
 
 ## Classes
 
@@ -143,40 +113,27 @@ Every Citation makes this explicit in its `source` field, so an analyst
 ## Worked instance
 
 The Aurelia Electronics case (`TXN-88213-7745`), as actual instances of
-these classes:
+these classes -- one line per object or per pipeline step:
 
-```
-Transaction(id="TXN-88213-7745", amount=2340, currency="USD",
-            merchant="Aurelia Electronics", category="electronics",
-            channel="ecommerce", geo="Lagos, NG", home_geo="Columbus, OH",
-            device_id="dev-9a21", device_new=true,
-            ip_address="197.210.54.12", new_payee=false)
-
-CustomerProfile(account_id="acct-4417", name="J. Whitfield", prior_flag_count=0)
-
-Case(id="TXN-88213-7745") hasTransaction Transaction
-Case                       hasCustomerProfile CustomerProfile
-
-Supervisor routesTo [RiskAnalysisAgent, ComplianceAgent]   # full review:
-                                                            # amount > $250 and device_new
-
-RiskAnalysisAgent produces Finding(score=92, reason="... 99.5th percentile ...")
-Finding hasCitation Citation(label="Amount vs. a real fraud dataset",
-                              source="ULB ... dataset (284,807 real transactions)",
-                              provenance=real)
-Finding hasCitation Citation(label="Recent activity, device, IP, network signals",
-                              source="Simulated -- not from a real data source",
-                              provenance=simulated)
-
-ComplianceAgent produces Finding(score=5, reason="No sanctions match ...")
-Finding hasCitation Citation(label="OFAC sanctions screen", source="US Treasury OFAC SDN list",
-                              provenance=real)
-
-Aggregator yields RiskFactor[RiskAnalysis(92), Compliance(5)] -> risk_score=61.6
-DecisionRouter setsDecision escalate   # 25 < 61.6 < 90
-Decision escalatesTo HumanAnalyst
-HumanAnalyst resolves Decision(approve)
-NarrativeAgent explains Decision -> narrative text
+```instance
+transaction: TXN-88213-7745 | $2,340.00 USD | Aurelia Electronics (electronics, ecommerce) | Lagos, NG (home: Columbus, OH) | device dev-9a21 (new) | ip 197.210.54.12 | not a new payee
+customer: acct-4417 | J. Whitfield | prior_flag_count = 0
+step: Supervisor | routesTo [RiskAnalysisAgent, ComplianceAgent] | full review -- amount > $250 and device_new
+step: RiskAnalysisAgent | produces Finding(score=92) | 99.5th percentile vs. the real reference dataset, plus 5 simulated signals (velocity, travel, device, IP, linked accounts) -- see Citation rows below
+step: ComplianceAgent | produces Finding(score=5) | no OFAC match, not a FATF-listed jurisdiction, no structuring flag -- all real, policy-cited
+step: Aggregator | yields RiskFactor[RiskAnalysis(92), Compliance(5)] | composite risk_score = 61.6
+step: DecisionRouter | setsDecision escalate | 25 < 61.6 < 90
+step: HumanAnalyst | resolves Decision(approve) | analyst override after reviewing the evidence
+step: NarrativeAgent | explains Decision | case note generated for the record
+citation: Amount vs. a real fraud dataset | real | ULB dataset (284,807 real transactions), 99.5th percentile
+citation: Recent activity (velocity) | simulated | deterministic hash of account_id, not a real lookup
+citation: Travel plausibility | simulated | deterministic hash of account_id + geo, not a real lookup
+citation: Device fingerprint | simulated | deterministic hash of device_id + account_id, not a real lookup
+citation: IP reputation | simulated | deterministic hash of ip_address, not a real lookup
+citation: Linked accounts (shared device/IP) | simulated | deterministic hash of device_id + ip_address, not a real lookup
+citation: OFAC sanctions screen | real | US Treasury OFAC SDN list, fuzzy-matched, no candidate match
+citation: FATF jurisdiction check | real | compliance_policy.md section 3, Lagos NG not listed
+citation: Structuring / CTR rules | real | compliance_policy.md section 2, no flags at $2,340.00
 ```
 
 ## Where this doesn't (yet) apply

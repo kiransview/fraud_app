@@ -55,9 +55,21 @@
   .case-score-line .score{font-family:var(--font-mono);font-weight:600;color:var(--text);}
   .band-good{color:var(--good);} .band-warning{color:var(--warning);}
   .band-serious{color:var(--serious);} .band-critical{color:var(--critical);}
-  .case-factors{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
-  .case-factor{font-size:11.5px;color:var(--text-3);}
-  .case-factor b{color:var(--text-2);}
+  .case-factors{margin-top:8px;display:flex;flex-direction:column;gap:10px;}
+  .case-factor-head{font-size:11.5px;color:var(--text-3);margin-bottom:5px;}
+  .case-factor-head b{color:var(--text-2);}
+  .case-evidence-wrap{overflow-x:auto;border:1px solid var(--line-soft);border-radius:8px;}
+  table.case-evidence{width:100%;border-collapse:collapse;font-size:11px;}
+  table.case-evidence th{
+    text-align:left;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;font-size:9.5px;
+    color:var(--text-3);background:var(--surface-raised);padding:5px 8px;border-bottom:1px solid var(--line-soft);white-space:nowrap;
+  }
+  table.case-evidence td{padding:6px 8px;border-bottom:1px solid var(--line-soft);color:var(--text-2);vertical-align:top;}
+  table.case-evidence tr:last-child td{border-bottom:none;}
+  table.case-evidence td:first-child{color:var(--text);font-weight:600;white-space:nowrap;}
+  .prov-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:2px 6px;border-radius:20px;white-space:nowrap;}
+  .prov-badge.real{color:var(--signal);background:var(--signal-bg);}
+  .prov-badge.simulated{color:var(--text-3);background:var(--surface-raised);}
   .case-narrative{margin-top:8px;font-size:12.5px;color:var(--text-2);line-height:1.5;border-top:1px solid var(--line-soft);padding-top:8px;}
   .case-actions{display:flex;gap:8px;margin-top:10px;}
   .case-actions .btn{padding:6px 12px;font-size:12px;}
@@ -398,6 +410,23 @@
   }
 
   // ------------------------------------------------------------ case cards --
+  function renderEvidenceTable(citations) {
+    if (!citations || !citations.length) return '';
+    const rows = citations.map(c => `
+      <tr>
+        <td>${escapeHtml(c.label || '')}</td>
+        <td>${escapeHtml(c.excerpt || '')}</td>
+        <td><span class="prov-badge ${c.provenance === 'real' ? 'real' : 'simulated'}">${c.provenance === 'real' ? 'Real' : 'Simulated'}</span></td>
+      </tr>`).join('');
+    return `
+      <div class="case-evidence-wrap">
+        <table class="case-evidence">
+          <thead><tr><th>Signal</th><th>Basis for the score</th><th>Source</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
   function deriveNodeStates(c) {
     const s = {};
     s.supervisor = (c.route || []).length > 0 ? { status: 'done', note: `Routed to: ${c.route.join(', ')}` } : { status: 'running', note: '' };
@@ -430,10 +459,15 @@
       return `<div class="case-step"><span class="dot ${st.status}"></span><span class="label">${NODE_LABELS[k]}</span><span class="detail">${escapeHtml(st.note || '')}</span></div>`;
     }).join('');
 
-    const factorSource = (c.risk_factors && c.risk_factors.length) ? c.risk_factors : Object.entries(c.findings).map(([agent, f]) => ({ agent, score: f.score, reason: f.reason }));
-    const factorsHtml = factorSource.length
-      ? factorSource.map(f => `<div class="case-factor"><b>${NODE_LABELS[f.agent] || f.agent}</b> (${f.score ?? 'n/a'}): ${escapeHtml(f.reason || '')}</div>`).join('')
-      : '';
+    const factorSource = (c.risk_factors && c.risk_factors.length)
+      ? c.risk_factors
+      : Object.entries(c.findings).map(([agent, f]) => ({ agent, score: f.score, reason: f.reason, citations: f.citations }));
+    const factorsHtml = factorSource.length ? factorSource.map(f => `
+      <div>
+        <div class="case-factor-head"><b>${NODE_LABELS[f.agent] || f.agent}</b> (${f.score ?? 'n/a'}): ${escapeHtml(f.reason || '')}</div>
+        ${renderEvidenceTable(f.citations)}
+      </div>
+    `).join('') : '';
 
     const scoreHtml = c.risk_score != null
       ? `<div class="case-score-line">Risk score: <span class="score band-${bandFor(c.risk_score).key}">${c.risk_score}/100 (${bandFor(c.risk_score).label})</span></div>`

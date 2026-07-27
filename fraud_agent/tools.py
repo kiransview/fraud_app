@@ -263,6 +263,58 @@ def explain_risk_evidence(
     profile = _amount_risk_profile(amount)
     fraud_rate = profile["observed_fraud_rate_for_this_amount_range"]
     fraud_rate_str = f"{fraud_rate * 100:.3f}%" if fraud_rate is not None else "n/a"
+
+    velocity = _txn_velocity_lookup(account_id)
+    geo_check = _geo_distance_check(account_id, geo, home_geo)
+    device = _device_fingerprint_lookup(device_id, account_id)
+    ip_rep = _ip_reputation(ip_address)
+    linked = _shared_attribute_graph_query(device_id, ip_address)
+
+    travel_bits = (
+        f"{geo_check['distance_km']:,} km from the account's home region, "
+        f"{geo_check['hours_since_last_session']}h since the last session -- "
+    )
+    travel_bits += (
+        "exceeds plausible commercial-travel speed (impossible-travel flag)."
+        if geo_check["impossible_travel"] else "within plausible travel speed."
+    )
+
+    if device["known_device"]:
+        device_excerpt = (
+            f"Device {device_id} has been seen before on this account, first seen "
+            f"{device['first_seen_days_ago']} day(s) ago."
+        )
+    else:
+        device_excerpt = (
+            f"Device {device_id} has not been seen before on this account, and is "
+            f"associated with {device['seen_on_other_accounts']} other account(s)."
+        )
+
+    ip_bits = []
+    if ip_rep["is_datacenter"]:
+        ip_bits.append("datacenter IP")
+    elif ip_rep["is_proxy_or_vpn"]:
+        ip_bits.append("proxy/VPN IP")
+    else:
+        ip_bits.append("no proxy/VPN/datacenter flag")
+    ip_bits.append(f"{ip_rep['abuse_reports_90d']} abuse report(s) in the last 90 days")
+    ip_excerpt = f"{ip_address}: " + ", ".join(ip_bits) + "."
+
+    if linked["linked_accounts"]:
+        linked_excerpt = (
+            f"{linked['linked_accounts']} other account(s) share this device or IP; "
+            f"{linked['linked_flagged_accounts']} of those are already flagged."
+        )
+    else:
+        linked_excerpt = "No other accounts share this device or IP."
+
+    sim_note = (
+        "Simulated -- deterministic hash of the input, not looked up anywhere real "
+        "(no public dataset can legitimately expose real per-account device/session "
+        "history; swap the corresponding fraud_agent/tools.py function for a real "
+        "vendor/DB integration)."
+    )
+
     return [
         {
             "label": "Amount vs. a real fraud dataset",
@@ -276,19 +328,46 @@ def explain_risk_evidence(
                 f"(dataset-wide rate: {profile['observed_overall_fraud_rate'] * 100:.3f}%)."
             ),
             "path": "data/reference/amount_baseline.json",
+            "provenance": "real",
         },
         {
-            "label": "Recent activity, device, IP, network signals",
-            "source": "Simulated -- not from a real data source",
+            "label": "Recent activity (velocity)",
+            "source": sim_note,
             "excerpt": (
-                "These four signals are deterministic simulations for this demo "
-                "(hashed from the input, not looked up anywhere real) -- no public "
-                "dataset can legitimately expose real per-account device or session "
-                "history. Swap fraud_agent/tools.py's _txn_velocity_lookup, "
-                "_geo_distance_check, _device_fingerprint_lookup, _ip_reputation, and "
-                "_shared_attribute_graph_query for a real vendor/DB integration."
+                f"{velocity['txns_last_24h']} transaction(s) in the last 24h "
+                f"({velocity['txns_last_1h']} in the last hour); most recent one "
+                f"{velocity['minutes_since_last_txn']} minute(s) ago."
             ),
             "path": "fraud_agent/tools.py",
+            "provenance": "simulated",
+        },
+        {
+            "label": "Travel plausibility",
+            "source": sim_note,
+            "excerpt": travel_bits,
+            "path": "fraud_agent/tools.py",
+            "provenance": "simulated",
+        },
+        {
+            "label": "Device fingerprint",
+            "source": sim_note,
+            "excerpt": device_excerpt,
+            "path": "fraud_agent/tools.py",
+            "provenance": "simulated",
+        },
+        {
+            "label": "IP reputation",
+            "source": sim_note,
+            "excerpt": ip_excerpt,
+            "path": "fraud_agent/tools.py",
+            "provenance": "simulated",
+        },
+        {
+            "label": "Linked accounts (shared device/IP)",
+            "source": sim_note,
+            "excerpt": linked_excerpt,
+            "path": "fraud_agent/tools.py",
+            "provenance": "simulated",
         },
     ]
 
@@ -332,17 +411,20 @@ def explain_compliance_evidence(name: str, amount: float, geo: str) -> list[dict
             "source": "US Treasury OFAC SDN list (~19,000 entries, sanctionslistservice.ofac.treas.gov)",
             "excerpt": sanctions_excerpt,
             "path": "data/reference/ofac_sdn.csv",
+            "provenance": "real",
         },
         {
             "label": "FATF jurisdiction check",
             "source": "compliance_policy.md, section 3 (FATF grey/black lists, June 2026 update)",
             "excerpt": jurisdiction_excerpt,
             "path": "data/reference/compliance_policy.md",
+            "provenance": "real",
         },
         {
             "label": "Structuring / CTR rules",
             "source": "compliance_policy.md, section 2 (31 CFR 1010.311, 31 U.S.C. Sec. 5324)",
             "excerpt": rules_excerpt,
             "path": "data/reference/compliance_policy.md",
+            "provenance": "real",
         },
     ]
